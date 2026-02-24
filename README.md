@@ -45,31 +45,6 @@ pip install -e .               # core only
 pip install -e ".[all]"        # core + all LLM providers
 ```
 
-## Quick Start
-
-```python
-import asyncio
-from maxun import Extract, Config
-
-async def main():
-    extractor = Extract(Config(api_key="your-api-key"))
-
-    robot = await (
-        extractor
-        .create("HN Top Story")
-        .navigate("https://news.ycombinator.com")
-        .capture_text({
-            "Title": "tr.athing:first-child .titleline > a",
-            "Points": "tr.athing:first-child + tr .score",
-        })
-    )
-
-    result = await robot.run()
-    print(result["data"]["textData"])
-
-asyncio.run(main())
-```
-
 ## Configuration
 
 ```python
@@ -91,38 +66,6 @@ MAXUN_TEAM_ID=your-team-uuid
 ```
 
 ## Core Classes
-
-### Extract
-
-Build robots that extract structured data from pages.
-
-```python
-from maxun import Extract, Config
-
-extractor = Extract(Config(api_key="..."))
-
-# Capture specific text fields
-robot = await (
-    extractor
-    .create("My Robot")
-    .navigate("https://example.com")
-    .capture_text({"Title": "h1", "Price": ".price"})
-)
-
-# Capture a list of items with optional pagination
-robot = await (
-    extractor
-    .create("Product List")
-    .navigate("https://shop.example.com")
-    .capture_list({
-        "selector": "article.product",
-        "pagination": {"type": "clickNext", "selector": "a.next"},
-        "maxItems": 100,
-    })
-)
-
-result = await robot.run()
-```
 
 ### Scrape
 
@@ -186,6 +129,38 @@ robot = await searcher.create(
         mode="discover",     # "discover" | "scrape"
         limit=10,
     ),
+)
+
+result = await robot.run()
+```
+
+### Extract
+
+Build robots that extract structured data from pages.
+
+```python
+from maxun import Extract, Config
+
+extractor = Extract(Config(api_key="..."))
+
+# Capture specific text fields
+robot = await (
+    extractor
+    .create("My Robot")
+    .navigate("https://example.com")
+    .capture_text({"Title": "h1", "Price": ".price"})
+)
+
+# Capture a list of items with optional pagination
+robot = await (
+    extractor
+    .create("Product List")
+    .navigate("https://shop.example.com")
+    .capture_list({
+        "selector": "article.product",
+        "pagination": {"type": "clickNext", "selector": "a.next"},
+        "maxItems": 100,
+    })
 )
 
 result = await robot.run()
