@@ -31,6 +31,20 @@ pip install "maxun[openai]"      # OpenAI GPT
 pip install "maxun[all]"         # All LLM providers
 ```
 
+## Local Development
+
+Dependencies are declared in `pyproject.toml`.
+
+To install the SDK locally in editable mode:
+
+```bash
+cd python-sdk
+python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -e .               # core only
+pip install -e ".[all]"        # core + all LLM providers
+```
+
 ## Quick Start
 
 ```python
