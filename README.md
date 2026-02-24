@@ -6,16 +6,16 @@ Works with both Maxun Cloud and Maxun Open Source.
 
 ## What can you do with Maxun SDK?
 
-- **Extract structured data** from any website using CSS selectors
-- **Scrape entire pages** as Markdown, HTML, or screenshots
-- **Crawl multiple pages** automatically to discover and collect content
-- **Perform web searches** and extract results as metadata or full content
-- **Use AI to extract data** with natural language prompts
-- **Capture screenshots** (viewport or full page)
-- **Automate workflows** with clicks, form fills, and navigation
-- **Schedule recurring jobs** to keep your data fresh
-- **Receive webhooks** when extractions complete
-- **Handle pagination** automatically (scroll, click, load more)
+- Extract structured data from any website
+- Scrape entire pages as Markdown or HTML
+- Crawl multiple pages automatically to discover and scrape content
+- Perform web searches and extract results as metadata or full content
+- Use AI to extract data with natural language prompts
+- Capture screenshots (visible area or full page)
+- Automate workflows with clicks, form fills, and navigation
+- Schedule recurring jobs to keep your data fresh
+- Get webhooks when extractions complete
+- Handle pagination automatically (scroll, click, load more)
 
 ## Installation
 
