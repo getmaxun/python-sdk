@@ -1,5 +1,6 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 from .workflow_builder import WorkflowBuilder
+from ..types import ExtractFields, ExtractListConfig
 
 
 class ExtractBuilder(WorkflowBuilder):
@@ -11,20 +12,36 @@ class ExtractBuilder(WorkflowBuilder):
         self._extractor = extractor
         return self
 
-    def capture_text(self, fields: Dict[str, str], name: Optional[str] = None):
+    def capture_text(self, fields: ExtractFields, name: Optional[str] = None):
         return self._add_action("scrapeSchema", [fields], name)
 
-    def capture_list(self, config: dict, name: Optional[str] = None):
+    def capture_list(self, config: Union[ExtractListConfig, dict], name: Optional[str] = None):
+        # Support both ExtractListConfig dataclass and plain dict
+        if hasattr(config, "selector"):
+            selector = config.selector
+            max_items = config.max_items if config.max_items is not None else 100
+            pagination = config.pagination
+        else:
+            selector = config["selector"]
+            max_items = config.get("maxItems", 100)
+            pagination = config.get("pagination")
+
         scrape_list_config = {
-            "itemSelector": config["selector"],
-            "maxItems": config.get("maxItems", 100),
+            "itemSelector": selector,
+            "maxItems": max_items,
         }
 
-        if config.get("pagination"):
-            scrape_list_config["pagination"] = {
-                "type": config["pagination"]["type"],
-                "selector": config["pagination"].get("selector"),
-            }
+        if pagination is not None:
+            if hasattr(pagination, "type"):
+                scrape_list_config["pagination"] = {
+                    "type": pagination.type,
+                    "selector": pagination.selector or None,
+                }
+            else:
+                scrape_list_config["pagination"] = {
+                    "type": pagination["type"],
+                    "selector": pagination.get("selector") or None,
+                }
 
         return self._add_action("scrapeList", [scrape_list_config], name)
 

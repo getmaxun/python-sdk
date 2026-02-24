@@ -1,7 +1,10 @@
 import os
 from typing import List
 
-from openai import AsyncOpenAI
+try:
+    from openai import AsyncOpenAI
+except ImportError:
+    AsyncOpenAI = None  # type: ignore[assignment,misc]
 
 from ..types import LLMMessage, LLMResponse, TokenUsage
 from .base import BaseLLMProvider
@@ -9,6 +12,11 @@ from .base import BaseLLMProvider
 
 class OpenAIProvider(BaseLLMProvider):
     def __init__(self, config):
+        if AsyncOpenAI is None:
+            raise ImportError(
+                "The 'openai' package is required to use OpenAIProvider. "
+                "Install it with: pip install openai"
+            )
         super().__init__(config)
 
         self.client = AsyncOpenAI(

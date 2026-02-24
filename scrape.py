@@ -7,12 +7,6 @@ from .client import Client
 from .types import Config, WorkflowFile, Format
 from .robot import Robot
 
-
-class ScrapeOptions:
-    def __init__(self, formats: Optional[List[Format]] = None):
-        self.formats = formats or ["markdown"]
-
-
 class Scrape:
     def __init__(self, config: Config):
         self.client = Client(config)
@@ -21,12 +15,10 @@ class Scrape:
         self,
         name: str,
         url: str,
-        options: Optional[ScrapeOptions] = None,
+        formats: Optional[List[Format]] = None,
     ) -> Robot:
         if not url:
             raise ValueError("URL is required")
-
-        options = options or ScrapeOptions()
 
         robot_id = f"robot_{int(time.time() * 1000)}_{self._random_string()}"
 
@@ -36,7 +28,7 @@ class Scrape:
                 "id": robot_id,
                 "robotType": "scrape",
                 "url": url,
-                "formats": options.formats,
+                "formats": formats or ["markdown"],
             },
             "workflow": [],
         }

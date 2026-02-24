@@ -4,7 +4,7 @@ import string
 from typing import List, Optional
 
 from .client import Client
-from .types import Config
+from .types import Config, LLMProvider
 from .robot import Robot
 from .builders.extract_builder import ExtractBuilder
 
@@ -47,7 +47,25 @@ class Extract:
     async def delete_robot(self, robot_id: str) -> None:
         await self.client.delete_robot(robot_id)
 
-    async def extract(self, options: dict) -> Robot:
+    async def extract(
+        self,
+        prompt: str,
+        url: Optional[str] = None,
+        llm_provider: Optional[LLMProvider] = None,
+        llm_model: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+        llm_base_url: Optional[str] = None,
+        robot_name: Optional[str] = None,
+    ) -> Robot:
+        options = {
+            "prompt": prompt,
+            "url": url,
+            "llmProvider": llm_provider,
+            "llmModel": llm_model,
+            "llmApiKey": llm_api_key,
+            "llmBaseUrl": llm_base_url,
+            "robotName": robot_name,
+        }
         robot_data = await self.client.extract_with_llm(options)
         robot = await self.client.get_robot(robot_data["robotId"])
         return Robot(self.client, robot)
