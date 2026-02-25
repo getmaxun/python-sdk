@@ -1,5 +1,7 @@
+import time
 import httpx
-from typing import Any, Dict, Optional
+from datetime import datetime, timezone
+from typing import Optional
 from .types import Config, MaxunError
 
 
@@ -35,7 +37,7 @@ class Client:
             except Exception:
                 payload = None
             raise MaxunError(
-                payload.get("error") if payload else str(e),
+                (payload.get("error") or payload.get("message")) if payload else str(e),
                 status_code=e.response.status_code,
                 details=payload,
             )
@@ -43,7 +45,8 @@ class Client:
             raise MaxunError("No response from server", details=str(e))
 
     async def get_robots(self):
-        return await self._handle(self.client.get("/robots"))
+        data = await self._handle(self.client.get("/robots"))
+        return data or []
 
     async def get_robot(self, robot_id: str):
         data = await self._handle(self.client.get(f"/robots/{robot_id}"))
@@ -52,14 +55,31 @@ class Client:
         return data
 
     async def create_robot(self, workflow_file: dict):
-        return await self._handle(
-            self.client.post("/robots", json=workflow_file, timeout=120)
+        # Normalize both `type` and `robotType` in meta, mirroring the Node SDK behaviour
+        meta = workflow_file.get("meta") or {}
+        robot_type_value = meta.get("robotType") or meta.get("type")
+        payload = {
+            **workflow_file,
+            "meta": {
+                **meta,
+                "type": robot_type_value,
+                "robotType": robot_type_value,
+            },
+        }
+        data = await self._handle(
+            self.client.post("/robots", json=payload, timeout=120)
         )
+        if not data:
+            raise MaxunError("Failed to create robot")
+        return data
 
     async def update_robot(self, robot_id: str, updates: dict):
-        return await self._handle(
+        data = await self._handle(
             self.client.put(f"/robots/{robot_id}", json=updates)
         )
+        if not data:
+            raise MaxunError(f"Failed to update robot {robot_id}")
+        return data
 
     async def delete_robot(self, robot_id: str):
         await self._handle(self.client.delete(f"/robots/{robot_id}"))
@@ -77,17 +97,59 @@ class Client:
         )
 
     async def get_runs(self, robot_id: str):
-        return await self._handle(self.client.get(f"/robots/{robot_id}/runs"))
+        data = await self._handle(self.client.get(f"/robots/{robot_id}/runs"))
+        return data or []
 
     async def get_run(self, robot_id: str, run_id: str):
-        return await self._handle(
+        data = await self._handle(
             self.client.get(f"/robots/{robot_id}/runs/{run_id}")
         )
+        if not data:
+            raise MaxunError(f"Run {run_id} not found", 404)
+        return data
 
     async def abort_run(self, robot_id: str, run_id: str):
         await self._handle(
             self.client.post(f"/robots/{robot_id}/runs/{run_id}/abort")
         )
+
+    async def schedule_robot(self, robot_id: str, schedule: dict):
+        data = await self._handle(
+            self.client.put(f"/robots/{robot_id}", json={"schedule": schedule})
+        )
+        if not data:
+            raise MaxunError(f"Failed to schedule robot {robot_id}")
+        return data
+
+    async def unschedule_robot(self, robot_id: str):
+        data = await self._handle(
+            self.client.put(f"/robots/{robot_id}", json={"schedule": None})
+        )
+        if not data:
+            raise MaxunError(f"Failed to unschedule robot {robot_id}")
+        return data
+
+    async def add_webhook(self, robot_id: str, webhook: dict):
+        robot = await self.get_robot(robot_id)
+        webhooks = list(robot.get("webhooks") or [])
+
+        now = datetime.now(timezone.utc).isoformat()
+        new_webhook = {
+            "id": f"webhook_{int(time.time() * 1000)}",
+            "url": webhook["url"],
+            "events": webhook.get("events") or ["run.completed", "run.failed"],
+            "active": True,
+            "createdAt": now,
+            "updatedAt": now,
+        }
+        webhooks.append(new_webhook)
+
+        data = await self._handle(
+            self.client.put(f"/robots/{robot_id}", json={"webhooks": webhooks})
+        )
+        if not data:
+            raise MaxunError(f"Failed to add webhook to robot {robot_id}")
+        return data
 
     async def extract_with_llm(self, options: dict):
         return await self._handle(

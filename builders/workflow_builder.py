@@ -52,17 +52,28 @@ class WorkflowBuilder:
         return self._add_action("waitForTimeout", [milliseconds])
 
     def capture_screenshot(self, name: Optional[str] = None, options: Optional[dict] = None):
-        default = {
-            "type": "png",
-            "caret": "hide",
-            "scale": "device",
-            "timeout": 30000,
-            "fullPage": True,
-            "animations": "allow",
-        }
+        if options:
+            screenshot_args = {
+                "type": options.get("type", "png"),
+                "caret": options.get("caret", "hide"),
+                "scale": options.get("scale", "device"),
+                "timeout": options.get("timeout", 30000),
+                "fullPage": options.get("fullPage", True),
+                "animations": options.get("animations", "allow"),
+            }
+            if options.get("quality") is not None:
+                screenshot_args["quality"] = options["quality"]
+        else:
+            screenshot_args = {
+                "type": "png",
+                "caret": "hide",
+                "scale": "device",
+                "timeout": 30000,
+                "fullPage": True,
+                "animations": "allow",
+            }
 
-        args = options or default
-        self._add_action("screenshot", [args], name)
+        self._add_action("screenshot", [screenshot_args], name)
         return self
 
     def scroll(self, direction: str, distance: Optional[int] = None):
@@ -97,6 +108,12 @@ class WorkflowBuilder:
 
     def get_workflow_array(self):
         return self.workflow
+
+    def get_workflow(self):
+        return {
+            "meta": self.meta,
+            "workflow": self.workflow,
+        }
 
     def get_meta(self):
         return self.meta

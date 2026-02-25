@@ -1,7 +1,21 @@
-from typing import Any
+import dataclasses
 from .client import Client
 from .types import Config, CrawlConfig
 from .robot import Robot
+
+
+def _to_camel(snake: str) -> str:
+    parts = snake.split("_")
+    return parts[0] + "".join(p.title() for p in parts[1:])
+
+
+def _dataclass_to_dict(obj) -> dict:
+    """Convert a dataclass to a camelCase dict, dropping None values."""
+    return {
+        _to_camel(k): v
+        for k, v in dataclasses.asdict(obj).items()
+        if v is not None
+    }
 
 
 class Crawl:
@@ -19,7 +33,7 @@ class Crawl:
             url,
             {
                 "name": name,
-                "crawlConfig": crawl_config,
+                "crawlConfig": _dataclass_to_dict(crawl_config),
             },
         )
 

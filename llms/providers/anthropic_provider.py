@@ -1,7 +1,10 @@
 import os
 from typing import List
 
-from anthropic import AsyncAnthropic
+try:
+    from anthropic import AsyncAnthropic
+except ImportError:
+    AsyncAnthropic = None  # type: ignore[assignment,misc]
 
 from ..types import LLMMessage, LLMResponse, TokenUsage
 from .base import BaseLLMProvider
@@ -9,6 +12,11 @@ from .base import BaseLLMProvider
 
 class AnthropicProvider(BaseLLMProvider):
     def __init__(self, config):
+        if AsyncAnthropic is None:
+            raise ImportError(
+                "The 'anthropic' package is required to use AnthropicProvider. "
+                "Install it with: pip install anthropic"
+            )
         super().__init__(config)
 
         self.client = AsyncAnthropic(
