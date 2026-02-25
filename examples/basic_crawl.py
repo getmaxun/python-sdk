@@ -23,7 +23,7 @@ from maxun import Crawl, Config, CrawlConfig
 async def main():
     crawler = Crawl(Config(
         api_key=os.environ["MAXUN_API_KEY"],
-        base_url=os.environ.get("MAXUN_BASE_URL", "http://localhost:8080/api/sdk"),
+        base_url=os.environ.get("MAXUN_BASE_URL", "https://app.maxun.dev/"),
     ))
 
     robot = await crawler.create(

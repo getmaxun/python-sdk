@@ -21,7 +21,7 @@ cp ../.env.example ../.env
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MAXUN_API_KEY` | Your Maxun API key (required) | — |
-| `MAXUN_BASE_URL` | Base URL of your Maxun server | `http://localhost:8080/api/sdk` |
+| `MAXUN_BASE_URL` | Base URL of your Maxun server | `https://app.maxun.dev/` |
 | `MAXUN_TEAM_ID` | Team UUID for team-scoped robots (optional) | — |
 
 **3. Run any example:**
