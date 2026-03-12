@@ -84,6 +84,11 @@ class Client:
     async def delete_robot(self, robot_id: str):
         await self._handle(self.client.delete(f"/robots/{robot_id}"))
 
+    async def duplicate_robot(self, robot_id: str, target_url: str):
+        return await self._handle(
+            self.client.post(f"/robots/{robot_id}/duplicate", json={"targetUrl": target_url})
+        )
+
     async def execute_robot(self, robot_id: str, options: Optional[dict] = None):
         return await self._handle(
             self.client.post(
