@@ -52,7 +52,7 @@ from maxun import Config
 
 config = Config(
     api_key="your-api-key",            # Required
-    base_url="http://localhost:8080/api/sdk",  # Optional, defaults to localhost
+    base_url="https://app.maxun.dev/api/sdk/",  # Optional, defaults to localhost
     team_id="your-team-uuid",          # Optional, for team-scoped robots
 )
 ```
@@ -61,7 +61,7 @@ Environment variables are supported via a `.env` file (uses `python-dotenv`):
 
 ```
 MAXUN_API_KEY=your-api-key
-MAXUN_BASE_URL=http://localhost:8080/api/sdk
+MAXUN_BASE_URL=https://app.maxun.dev/api/sdk/
 MAXUN_TEAM_ID=your-team-uuid
 ```
 

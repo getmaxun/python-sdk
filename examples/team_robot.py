@@ -24,7 +24,7 @@ from maxun import Extract, Config
 async def main():
     extractor = Extract(Config(
         api_key=os.environ["MAXUN_API_KEY"],
-        base_url=os.environ.get("MAXUN_BASE_URL", "http://localhost:8080/api/sdk"),
+        base_url=os.environ.get("MAXUN_BASE_URL", "https://app.maxun.dev/api/sdk/"),
         team_id=os.environ.get("MAXUN_TEAM_ID"),
     ))
 

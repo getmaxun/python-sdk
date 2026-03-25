@@ -17,7 +17,7 @@ class Client:
         if config.team_id:
             headers["x-team-id"] = config.team_id
 
-        self.base_url = config.base_url or "http://localhost:8080/api/sdk"
+        self.base_url = config.base_url or "https://app.maxun.dev/api/sdk/"
 
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
