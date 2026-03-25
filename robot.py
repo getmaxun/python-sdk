@@ -62,6 +62,10 @@ class Robot:
         updated = await self.client.update_robot(self.id, updates)
         self.robot_data = updated
 
+    async def duplicate(self, target_url: str):
+        new_robot_data = await self.client.duplicate_robot(self.id, target_url)
+        return Robot(self.client, new_robot_data)
+
     async def delete(self) -> None:
         await self.client.delete_robot(self.id)
 
