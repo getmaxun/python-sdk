@@ -16,20 +16,35 @@ class Scrape:
         name: str,
         url: str,
         formats: Optional[List[Format]] = None,
+        prompt_instructions: Optional[str] = None,
     ) -> Robot:
+        """
+        Create a scrape robot.
+
+        :param name: Robot name.
+        :param url: URL to scrape.
+        :param formats: Output formats (default: ["markdown"]).
+        :param prompt_instructions: Optional Smart Queries prompt. After scraping the
+            LLM analyzes the page and returns an answer. Adds 2 extra credits per run
+            on top of the base 1 scrape credit.
+        """
         if not url:
             raise ValueError("URL is required")
 
         robot_id = f"robot_{int(time.time() * 1000)}_{self._random_string()}"
 
+        meta: dict = {
+            "name": name,
+            "id": robot_id,
+            "robotType": "scrape",
+            "url": url,
+            "formats": formats or ["markdown"],
+        }
+        if prompt_instructions:
+            meta["promptInstructions"] = prompt_instructions.strip()
+
         workflow_file: WorkflowFile = {
-            "meta": {
-                "name": name,
-                "id": robot_id,
-                "robotType": "scrape",
-                "url": url,
-                "formats": formats or ["markdown"],
-            },
+            "meta": meta,
             "workflow": [],
         }
 
