@@ -1,7 +1,8 @@
 import time
+import os
 import httpx
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Union
 from .types import Config, MaxunError
 
 
@@ -160,6 +161,41 @@ class Client:
         return await self._handle(
             self.client.post("/extract/llm", json=options, timeout=300)
         )
+
+    async def create_document_robot(
+        self,
+        file: Union[str, bytes],
+        prompt: str,
+        robot_name: Optional[str] = None,
+        ollama_model: Optional[str] = None,
+        file_name: Optional[str] = None,
+    ) -> dict:
+        """Create a document-extraction robot from a PDF file path or bytes."""
+        if isinstance(file, str):
+            file_name = file_name or os.path.basename(file)
+            with open(file, 'rb') as f:
+                file_bytes = f.read()
+        else:
+            file_bytes = file
+            file_name = file_name or 'document.pdf'
+
+        data = {'prompt': prompt}
+        if robot_name:
+            data['robotName'] = robot_name
+        if ollama_model:
+            data['ollamaModel'] = ollama_model
+
+        response = await self.client.post(
+            '/robots/document',
+            files={'file': (file_name, file_bytes, 'application/pdf')},
+            data=data,
+            timeout=120,
+        )
+        response.raise_for_status()
+        body = response.json()
+        if not body.get('data') and not body.get('robot'):
+            raise MaxunError('Failed to create document robot')
+        return body
 
     async def create_crawl_robot(self, url: str, options: dict):
         return await self._handle(
