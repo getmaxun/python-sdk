@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any, Literal
 
 RobotType = Literal["extract", "scrape", "crawl", "search"]
 RobotMode = Literal["normal", "bulk"]
-Format = Literal["markdown", "html", "screenshot-visible", "screenshot-fullpage"]
+Format = Literal["markdown", "html", "text", "links", "screenshot-visible", "screenshot-fullpage"]
 RunStatus = Literal["running", "queued", "success", "failed", "aborting", "aborted"]
 TimeUnit = Literal["MINUTES", "HOURS", "DAYS", "WEEKS", "MONTHS"]
 CrawlMode = Literal["domain", "subdomain", "path"]
