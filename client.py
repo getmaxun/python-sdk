@@ -163,7 +163,7 @@ class Client:
             self.client.post("/extract/llm", json=options, timeout=300)
         )
 
-    async def create_document_robot(
+    async def create_document_extract_robot(
         self,
         file: Union[str, bytes],
         prompt: str,
