@@ -1,7 +1,8 @@
 import time
+import os
 import httpx
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Union
 from .types import Config, MaxunError
 
 
@@ -11,7 +12,8 @@ class Client:
 
         headers = {
             "x-api-key": self.api_key,
-            "Content-Type": "application/json",
+            # Content-Type is intentionally omitted here so httpx can set it
+            # correctly per request (e.g. multipart/form-data for file uploads)
         }
 
         if config.team_id:
@@ -160,6 +162,82 @@ class Client:
         return await self._handle(
             self.client.post("/extract/llm", json=options, timeout=300)
         )
+
+    async def create_document_extract_robot(
+        self,
+        file: Union[str, bytes],
+        prompt: str,
+        robot_name: Optional[str] = None,
+        ollama_model: Optional[str] = None,
+        file_name: Optional[str] = None,
+    ) -> dict:
+        """Create a document-extraction robot from a PDF file path or bytes."""
+        if isinstance(file, str):
+            file_name = file_name or os.path.basename(file)
+            with open(file, 'rb') as f:
+                file_bytes = f.read()
+        else:
+            file_bytes = file
+            file_name = file_name or 'document.pdf'
+
+        data = {'prompt': prompt}
+        if robot_name:
+            data['robotName'] = robot_name
+        if ollama_model:
+            data['ollamaModel'] = ollama_model
+
+        response = await self.client.post(
+            '/robots/document',
+            files={'file': (file_name, file_bytes, 'application/pdf')},
+            data=data,
+            timeout=120,
+        )
+        response.raise_for_status()
+        body = response.json()
+        if not body.get('data') and not body.get('robot'):
+            raise MaxunError('Failed to create document robot')
+        return body
+
+    async def create_document_parse_robot(
+        self,
+        file: Union[str, bytes],
+        output_formats: list,
+        robot_name: Optional[str] = None,
+        file_name: Optional[str] = None,
+    ) -> dict:
+        """Create a document-parse robot from a PDF file path or bytes."""
+        if isinstance(file, str):
+            file_name = file_name or os.path.basename(file)
+            with open(file, 'rb') as f:
+                file_bytes = f.read()
+        else:
+            file_bytes = file
+            file_name = file_name or 'document.pdf'
+
+        valid_formats = {'markdown', 'html', 'links'}
+        filtered = [f for f in output_formats if f in valid_formats]
+        if not filtered:
+            raise MaxunError('At least one valid output format is required (markdown, html, links)')
+
+        data = {}
+        if robot_name:
+            data['robotName'] = robot_name
+
+        files_payload = [('file', (file_name, file_bytes, 'application/pdf'))]
+        for fmt in filtered:
+            files_payload.append(('outputFormats[]', (None, fmt)))
+
+        response = await self.client.post(
+            '/robots/document-parse',
+            files=files_payload,
+            data=data,
+            timeout=120,
+        )
+        response.raise_for_status()
+        body = response.json()
+        if not body.get('data') and not body.get('robot'):
+            raise MaxunError('Failed to create document-parse robot')
+        return body
 
     async def create_crawl_robot(self, url: str, options: dict):
         return await self._handle(
