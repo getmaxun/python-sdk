@@ -57,13 +57,25 @@ class Extract:
         llm_base_url: Optional[str] = None,
         robot_name: Optional[str] = None,
     ) -> Robot:
-        options = {
-            "prompt": prompt,
-            "url": url,
+        """Create an AI-powered extraction robot from a natural language prompt.
+
+        The four ``llm_*`` arguments are SELF-HOSTED ONLY. They are honoured by a
+        self-hosted Maxun instance, where you supply your own inference. Maxun
+        Cloud manages the provider, model and credentials internally and will
+        reject a request that sets any of them with HTTP 400 — leave them as
+        ``None`` when pointing at Maxun Cloud.
+        """
+        llm_options = {
             "llmProvider": llm_provider,
             "llmModel": llm_model,
             "llmApiKey": llm_api_key,
             "llmBaseUrl": llm_base_url,
+        }
+
+        options = {
+            "prompt": prompt,
+            "url": url,
+            **{key: value for key, value in llm_options.items() if value is not None},
             "robotName": robot_name,
         }
         robot_data = await self.client.extract_with_llm(options)
