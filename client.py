@@ -3,6 +3,7 @@ import os
 import httpx
 from datetime import datetime, timezone
 from typing import Optional, Union
+from .llm_options import build_llm_payload
 from .types import Config, MaxunError
 
 
@@ -168,7 +169,10 @@ class Client:
         file: Union[str, bytes],
         prompt: str,
         robot_name: Optional[str] = None,
-        ollama_model: Optional[str] = None,
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+        llm_base_url: Optional[str] = None,
         file_name: Optional[str] = None,
     ) -> dict:
         """Create a document-extraction robot from a PDF file path or bytes."""
@@ -183,8 +187,7 @@ class Client:
         data = {'prompt': prompt}
         if robot_name:
             data['robotName'] = robot_name
-        if ollama_model:
-            data['ollamaModel'] = ollama_model
+        data.update(build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url))
 
         response = await self.client.post(
             '/robots/document',

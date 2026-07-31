@@ -1,6 +1,8 @@
 import dataclasses
 from .client import Client
-from .types import Config, SearchConfig
+from typing import List, Optional
+from .types import Config, SearchConfig, Format, LLMProvider
+from .llm_options import build_llm_payload
 from .robot import Robot
 
 def _to_camel(snake: str) -> str:
@@ -20,7 +22,16 @@ class Search:
     def __init__(self, config: Config):
         self.client = Client(config)
 
-    async def create(self, name: str, search_config: SearchConfig) -> Robot:
+    async def create(
+        self,
+        name: str,
+        search_config: SearchConfig,
+        formats: Optional[List[Format]] = None,
+        llm_provider: Optional[LLMProvider] = None,
+        llm_model: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+        llm_base_url: Optional[str] = None,
+    ) -> Robot:
         if not search_config:
             raise ValueError("Search configuration is required")
 
@@ -31,6 +42,8 @@ class Search:
             {
                 "name": name,
                 "searchConfig": _dataclass_to_dict(search_config),
+                **({"formats": formats} if formats else {}),
+                **build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url),
             }
         )
 

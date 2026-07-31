@@ -1,6 +1,8 @@
 import dataclasses
 from .client import Client
-from .types import Config, CrawlConfig
+from typing import List, Optional
+from .types import Config, CrawlConfig, Format, LLMProvider
+from .llm_options import build_llm_payload
 from .robot import Robot
 
 
@@ -22,7 +24,17 @@ class Crawl:
     def __init__(self, config: Config):
         self.client = Client(config)
 
-    async def create(self, name: str, url: str, crawl_config: CrawlConfig) -> Robot:
+    async def create(
+        self,
+        name: str,
+        url: str,
+        crawl_config: CrawlConfig,
+        formats: Optional[List[Format]] = None,
+        llm_provider: Optional[LLMProvider] = None,
+        llm_model: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+        llm_base_url: Optional[str] = None,
+    ) -> Robot:
         if not url:
             raise ValueError("URL is required")
 
@@ -34,6 +46,8 @@ class Crawl:
             {
                 "name": name,
                 "crawlConfig": _dataclass_to_dict(crawl_config),
+                **({"formats": formats} if formats else {}),
+                **build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url),
             },
         )
 
