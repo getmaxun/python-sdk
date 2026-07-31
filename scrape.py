@@ -4,7 +4,8 @@ import string
 from typing import List, Optional
 
 from .client import Client
-from .types import Config, WorkflowFile, Format
+from .types import Config, WorkflowFile, Format, LLMProvider
+from .llm_options import build_llm_payload
 from .robot import Robot
 
 class Scrape:
@@ -17,6 +18,10 @@ class Scrape:
         url: str,
         formats: Optional[List[Format]] = None,
         smart_queries: Optional[str] = None,
+        llm_provider: Optional[LLMProvider] = None,
+        llm_model: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+        llm_base_url: Optional[str] = None,
     ) -> Robot:
         """
         Create a scrape robot.
@@ -41,6 +46,8 @@ class Scrape:
         }
         if smart_queries:
             meta["smartQueries"] = smart_queries.strip()
+
+        meta.update(build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url))
 
         workflow_file: WorkflowFile = {
             "meta": meta,
