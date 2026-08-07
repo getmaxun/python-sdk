@@ -7,6 +7,15 @@ from .llm_options import build_llm_payload
 from .types import Config, MaxunError
 
 
+def _document_content_type(file_name: str) -> str:
+    ext = os.path.splitext(file_name or '')[1].lower()
+    if ext == '.csv':
+        return 'text/csv'
+    if ext == '.xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    return 'application/pdf'
+
+
 class Client:
     def __init__(self, config: Config):
         self.api_key = config.api_key
@@ -191,7 +200,7 @@ class Client:
 
         response = await self.client.post(
             '/robots/document',
-            files={'file': (file_name, file_bytes, 'application/pdf')},
+            files={'file': (file_name, file_bytes, _document_content_type(file_name))},
             data=data,
             timeout=120,
         )
@@ -207,8 +216,17 @@ class Client:
         output_formats: list,
         robot_name: Optional[str] = None,
         file_name: Optional[str] = None,
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+        llm_base_url: Optional[str] = None,
     ) -> dict:
-        """Create a document-parse robot from a PDF file path or bytes."""
+        """Create a document-parse robot from a PDF, CSV, or XLSX file path or bytes.
+
+        The 'summary' output format needs an LLM. Self-hosted Maxun requires an LLM
+        config (llm_provider/llm_model/llm_api_key/llm_base_url); Maxun Cloud manages
+        its own model and ignores them.
+        """
         if isinstance(file, str):
             file_name = file_name or os.path.basename(file)
             with open(file, 'rb') as f:
@@ -217,16 +235,17 @@ class Client:
             file_bytes = file
             file_name = file_name or 'document.pdf'
 
-        valid_formats = {'markdown', 'html', 'links'}
+        valid_formats = {'markdown', 'html', 'links', 'summary'}
         filtered = [f for f in output_formats if f in valid_formats]
         if not filtered:
-            raise MaxunError('At least one valid output format is required (markdown, html, links)')
+            raise MaxunError('At least one valid output format is required (markdown, html, links, summary)')
 
         data = {}
         if robot_name:
             data['robotName'] = robot_name
+        data.update(build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url))
 
-        files_payload = [('file', (file_name, file_bytes, 'application/pdf'))]
+        files_payload = [('file', (file_name, file_bytes, _document_content_type(file_name)))]
         for fmt in filtered:
             files_payload.append(('outputFormats[]', (None, fmt)))
 
