@@ -1,5 +1,6 @@
 from typing import Optional, List
 from .client import Client
+from .types import MaxunError
 
 
 class Robot:
@@ -61,6 +62,45 @@ class Robot:
     async def update(self, updates: dict) -> None:
         updated = await self.client.update_robot(self.id, updates)
         self.robot_data = updated
+
+    async def set_list_limit(self, limit: int) -> None:
+        supported_actions = {"scrapeList", "crawl", "search"}
+        workflow = (
+            (self.robot_data.get("recording") or {})
+            .get("workflow")
+            or []
+        )
+
+        for pair_index, pair in enumerate(workflow):
+            for action_index, action in enumerate(
+                pair.get("what") or []
+            ):
+                if action.get("action") not in supported_actions:
+                    continue
+
+                for arg_index, arg in enumerate(
+                    action.get("args") or []
+                ):
+                    if isinstance(arg, dict) and "limit" in arg:
+                        self.robot_data = (
+                            await self.client.update_list_limits(
+                                self.id,
+                                [
+                                    {
+                                        "pairIndex": pair_index,
+                                        "actionIndex": action_index,
+                                        "argIndex": arg_index,
+                                        "limit": limit,
+                                    }
+                                ],
+                            )
+                        )
+                        return
+
+        raise MaxunError(
+            "This robot has no scrapeList, crawl, or search "
+            "action with a limit to update."
+        )
 
     async def duplicate(self, target_url: str):
         new_robot_data = await self.client.duplicate_robot(self.id, target_url)
