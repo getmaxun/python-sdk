@@ -93,7 +93,7 @@ class Client:
             raise MaxunError(f"Failed to update robot {robot_id}")
         return data
 
-    async def update_list_limits(self, robot_id: str, limits: list,):
+    async def update_list_limits(self, robot_id: str, limits: list):
         """Update one or more list limits without resending the workflow."""
         data = await self._handle(
             self.client.put(
