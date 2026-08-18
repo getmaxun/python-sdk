@@ -2,9 +2,9 @@ import time
 import os
 import httpx
 from datetime import datetime, timezone
-from typing import Optional, Union
+from typing import Optional, Union, List
 from .llm_options import build_llm_payload
-from .types import Config, MaxunError
+from .types import Config, MaxunError, ListLimitUpdate
 
 
 def _document_content_type(file_name: str) -> str:
@@ -93,7 +93,7 @@ class Client:
             raise MaxunError(f"Failed to update robot {robot_id}")
         return data
 
-    async def update_list_limits(self, robot_id: str, limits: list):
+    async def update_list_limits(self, robot_id: str, limits: List[ListLimitUpdate],):
         """Update one or more list limits without resending the workflow."""
         data = await self._handle(
             self.client.put(

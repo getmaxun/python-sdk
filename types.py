@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any, Literal
+from typing import Optional, List, Dict, Any, Literal, TypedDict
 
 # ======================
 # Core Types
@@ -117,6 +117,11 @@ Run = Dict[str, Any]
 RunResult = Dict[str, Any]
 ApiResponse = Dict[str, Any]
 
+class ListLimitUpdate(TypedDict):
+    pairIndex: int
+    actionIndex: int
+    argIndex: int
+    limit: int
 
 class MaxunError(Exception):
     def __init__(self, message: str, status_code: Optional[int] = None, details: Any = None):

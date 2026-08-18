@@ -64,6 +64,7 @@ class Robot:
         self.robot_data = updated
 
     async def set_list_limit(self, limit: int) -> None:
+        """Set the limit for the first matching scrapeList, crawl, or search action."""
         supported_actions = {"scrapeList", "crawl", "search"}
         workflow = (
             (self.robot_data.get("recording") or {})
