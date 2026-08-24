@@ -214,6 +214,10 @@ specific = await robot.get_run("run-id")
 
 # Update metadata or workflow
 await robot.update({"meta": {"name": "New Name"}})
+
+# Update a list, crawl, or search limit without resending the workflow
+await robot.set_list_limit(25)
+
 await robot.refresh()   # reload from server
 
 # Delete
