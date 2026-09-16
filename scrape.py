@@ -22,6 +22,7 @@ class Scrape:
         llm_model: Optional[str] = None,
         llm_api_key: Optional[str] = None,
         llm_base_url: Optional[str] = None,
+        monitor: Optional[bool] = None,
     ) -> Robot:
         """
         Create a scrape robot.
@@ -46,6 +47,8 @@ class Scrape:
         }
         if smart_queries:
             meta["smartQueries"] = smart_queries.strip()
+        if monitor is not None:
+            meta["monitor"] = monitor
 
         meta.update(build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url))
 

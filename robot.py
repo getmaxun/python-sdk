@@ -28,6 +28,14 @@ class Robot:
     async def get_run(self, run_id: str) -> dict:
         return await self.client.get_run(self.id, run_id)
 
+    async def get_run_diff(
+        self,
+        run_id: str,
+        format: Optional[str] = None,
+    ) -> dict:
+        """Return the detailed monitoring diff for a completed run."""
+        return await self.client.get_run_diff(self.id, run_id, format)
+
     async def get_latest_run(self) -> Optional[dict]:
         runs = await self.get_runs()
         if not runs:

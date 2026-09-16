@@ -68,7 +68,8 @@ class Client:
 
     async def create_robot(self, workflow_file: dict):
         # Normalize both `type` and `robotType` in meta, mirroring the Node SDK behaviour
-        meta = workflow_file.get("meta") or {}
+        meta = dict(workflow_file.get("meta") or {})
+        monitor = meta.pop("monitor", None)
         robot_type_value = meta.get("robotType") or meta.get("type")
         payload = {
             **workflow_file,
@@ -76,6 +77,7 @@ class Client:
                 **meta,
                 "type": robot_type_value,
                 "robotType": robot_type_value,
+                **({"compareRuns": monitor} if monitor is not None else {}),
             },
         }
         data = await self._handle(
@@ -86,8 +88,16 @@ class Client:
         return data
 
     async def update_robot(self, robot_id: str, updates: dict):
+        payload = dict(updates)
+        if updates.get("meta") is not None:
+            meta = dict(updates["meta"])
+            monitor = meta.pop("monitor", None)
+            payload["meta"] = {
+                **meta,
+                **({"compareRuns": monitor} if monitor is not None else {}),
+            }
         data = await self._handle(
-            self.client.put(f"/robots/{robot_id}", json=updates)
+            self.client.put(f"/robots/{robot_id}", json=payload)
         )
         if not data:
             raise MaxunError(f"Failed to update robot {robot_id}")
@@ -138,6 +148,23 @@ class Client:
             raise MaxunError(f"Run {run_id} not found", 404)
         return data
 
+    async def get_run_diff(
+        self,
+        robot_id: str,
+        run_id: str,
+        format: Optional[str] = None,
+    ):
+        """Return the detailed monitoring diff for a completed run."""
+        data = await self._handle(
+            self.client.get(
+                f"/robots/{robot_id}/runs/{run_id}/diff",
+                params={"format": format} if format else None,
+            )
+        )
+        if not data:
+            raise MaxunError(f"Monitoring diff for run {run_id} was not found", 404)
+        return data
+
     async def abort_run(self, robot_id: str, run_id: str):
         await self._handle(
             self.client.post(f"/robots/{robot_id}/runs/{run_id}/abort")
@@ -182,8 +209,12 @@ class Client:
         return data
 
     async def extract_with_llm(self, options: dict):
+        payload = dict(options)
+        monitor = payload.pop("monitor", None)
+        if monitor is not None:
+            payload["compareRuns"] = monitor
         return await self._handle(
-            self.client.post("/extract/llm", json=options, timeout=300)
+            self.client.post("/extract/llm", json=payload, timeout=300)
         )
 
     async def create_document_extract_robot(

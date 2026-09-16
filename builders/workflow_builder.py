@@ -35,6 +35,11 @@ class WorkflowBuilder:
         self.current_step = main_step
         return self
 
+    def monitor_changes(self, enabled: bool = True):
+        """Compare each successful run with the previous successful run."""
+        self.meta["monitor"] = enabled
+        return self
+
     def click(self, selector: str):
         return self._add_action("click", [selector])
 

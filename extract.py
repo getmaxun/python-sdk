@@ -56,6 +56,7 @@ class Extract:
         llm_api_key: Optional[str] = None,
         llm_base_url: Optional[str] = None,
         robot_name: Optional[str] = None,
+        monitor: Optional[bool] = None,
     ) -> Robot:
         """Create an AI-powered extraction robot from a natural language prompt.
 
@@ -77,6 +78,7 @@ class Extract:
             "url": url,
             **{key: value for key, value in llm_options.items() if value is not None},
             "robotName": robot_name,
+            **({"monitor": monitor} if monitor is not None else {}),
         }
         robot_data = await self.client.extract_with_llm(options)
         robot = await self.client.get_robot(robot_data["robotId"])
