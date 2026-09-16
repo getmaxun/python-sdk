@@ -37,7 +37,7 @@ class WorkflowBuilder:
 
     def monitor_changes(self, enabled: bool = True):
         """Compare each successful run with the previous successful run."""
-        self.meta["compareRuns"] = enabled
+        self.meta["monitor"] = enabled
         return self
 
     def click(self, selector: str):
