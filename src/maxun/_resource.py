@@ -5,6 +5,15 @@ from .robot import Robot
 from .types import Config
 
 
+async def list_robots(client: Client, types: Optional[tuple] = None) -> List[Robot]:
+    """Fetch every robot once and keep those whose type is in ``types`` (all if None)."""
+    records = await client.get_robots()
+    robots = [Robot(client, record) for record in records]
+    if not types:
+        return robots
+    return [robot for robot in robots if robot.type in types]
+
+
 class Resource:
     """Shared plumbing for Scrape, Crawl, Search, Extract, Documents and Robots.
 
@@ -35,13 +44,15 @@ class Resource:
             await robot.set_monitoring(bool(monitor))
         return robot
 
-    async def list(self) -> List[Robot]:
-        """Robots of this kind on your account."""
-        robots = await self.client.get_robots()
-        wrapped = [Robot(self.client, r) for r in robots]
-        if self.robot_types is None:
-            return wrapped
-        return [r for r in wrapped if r.type in self.robot_types]
+    async def list(self, type: Optional[str] = None) -> List[Robot]:  # noqa: A002
+        """Robots of this kind on your account.
+
+        ``maxun.scrape.list()`` is the same call as ``maxun.robots.list(type="scrape")``.
+        """
+        types = (type,) if type else self.robot_types
+        if type and self.robot_types is not None and type not in self.robot_types:
+            raise ValueError(f"{self.__class__.__name__} robots are {', '.join(self.robot_types)}, not {type}.")
+        return await list_robots(self.client, types)
 
     async def get(self, robot_id: str) -> Robot:
         return Robot(self.client, await self.client.get_robot(robot_id))

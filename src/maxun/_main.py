@@ -26,8 +26,7 @@ class Robots(Resource):
     async def list(self, type: Optional[str] = None) -> List[Robot]:  # noqa: A002
         """All robots, or only those of one ``type`` (extract, scrape, crawl,
         search, doc-extract, doc-parse)."""
-        robots = await super().list()
-        return [r for r in robots if r.type == type] if type else robots
+        return await super().list(type)
 
     async def find(self, name: str) -> Robot:
         """The robot with this exact name."""
