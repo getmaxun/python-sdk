@@ -1,76 +1,38 @@
-"""
-Robot Management Example
-
-This example demonstrates:
-- Listing all robots
-- Getting a specific robot by ID
-- Updating robot metadata
-- Getting runs and execution history
-- Deleting robots
-"""
-
+"""List, find, rename, run, inspect, copy and delete robots."""
 import asyncio
-import os
-import sys
 
 from dotenv import load_dotenv
-from maxun import Extract, Config
-
-
-async def main():
-    extractor = Extract(Config(
-        api_key=os.environ["MAXUN_API_KEY"],
-        base_url=os.environ.get("MAXUN_BASE_URL", "https://app.maxun.dev/api/sdk/"),
-    ))
-
-    robot = await (
-        extractor
-        .create("Books Scraper")
-        .navigate("https://books.toscrape.com/")
-        .capture_list(
-            {
-                "selector": "article.product_pod",
-                "maxItems": 10,
-            }
-        )
-    )
-
-    print(f"Robot created: {robot.id}")
-
-    all_robots = await extractor.get_robots()
-    print(f"\nTotal robots: {len(all_robots)}")
-
-    fetched_robot = await extractor.get_robot(robot.id)
-    print(f"Fetched robot: {fetched_robot.name}")
-
-    await robot.update({"meta": {"name": "Updated Books Scraper"}})
-    await robot.refresh()
-    print(f"Updated name: {robot.name}")
-
-    # Run the robot
-    result = await robot.run()
-    list_data = result.get("data", {}).get("listData") or []
-    print(f"\nRun completed: {result.get('runId')}")
-    print(f"Items extracted: {len(list_data)}")
-
-    runs = await robot.get_runs()
-    print(f"\nTotal runs: {len(runs)}")
-
-    latest_run = await robot.get_latest_run()
-    print(f"Latest run: {latest_run.get('runId') if latest_run else None}")
-
-    specific_run = await robot.get_run(result.get("runId"))
-    print(f"Specific run status: {specific_run.get('status')}")
-
-    # Delete the robot
-    await robot.delete()
-    print("\nRobot deleted")
-
+from maxun import Maxun, NotFoundError
 
 load_dotenv()
 
-if not os.environ.get("MAXUN_API_KEY"):
-    print("Error: MAXUN_API_KEY environment variable is required", file=sys.stderr)
-    sys.exit(1)
+
+async def main():
+    async with Maxun() as maxun:
+        robot = await maxun.scrape.create("Books Scraper", "https://books.toscrape.com")
+
+        print([r.name for r in await maxun.robots.list()])          # every robot
+        print([r.name for r in await maxun.scrape.list()])          # only scrape robots
+        same = await maxun.robots.find("Books Scraper")             # by name
+        same = await maxun.robots.get(robot.id)                     # by id
+        print(same, same.url, same.formats)
+
+        await robot.rename("Books Scraper (renamed)")
+
+        result = await robot.run()
+        runs = await robot.get_runs()                                # newest first
+        latest = await robot.get_latest_run()
+        run = await robot.get_run(result.run_id)
+        print(len(runs), latest["runId"], run["status"])
+
+        copy = await robot.duplicate("https://books.toscrape.com/catalogue/page-2.html")
+        await copy.delete()
+        await robot.delete()
+
+        try:
+            await maxun.robots.get(robot.id)
+        except NotFoundError:
+            print("Deleted")
+
 
 asyncio.run(main())
