@@ -11,7 +11,7 @@ load_dotenv()
 async def main():
     async with Maxun() as maxun:
         robot = await (
-            maxun.extract.create("Hacker News Top Story")
+            maxun.extract("Hacker News Top Story")
             .navigate("https://news.ycombinator.com")
             .capture_text({
                 "Title": "tr.athing:first-child .titleline > a",

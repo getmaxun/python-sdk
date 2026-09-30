@@ -14,7 +14,7 @@ load_dotenv()
 
 async def main():
     async with Maxun() as maxun:
-        robot = await maxun.scrape.create("Example Daily", "https://example.com")
+        robot = await maxun.scrape("Example Daily", "https://example.com")
 
         # Every 6 hours
         schedule = await robot.schedule(run_every=6, run_every_unit="HOURS", timezone="Asia/Kolkata")

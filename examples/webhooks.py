@@ -13,7 +13,7 @@ load_dotenv()
 
 async def main():
     async with Maxun() as maxun:
-        robot = await maxun.scrape.create("Example With Webhook", "https://example.com")
+        robot = await maxun.scrape("Example With Webhook", "https://example.com")
 
         # Both events by default
         hook = await robot.add_webhook("https://your-server.example/maxun-hook")

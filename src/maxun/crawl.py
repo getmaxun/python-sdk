@@ -53,3 +53,6 @@ class Crawl(Resource):
             },
         )
         return await self._after_create(robot_data, monitor)
+
+    #: ``await maxun.crawl(name, url, ...)`` is the same as ``create``.
+    __call__ = create

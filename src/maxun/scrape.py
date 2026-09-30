@@ -66,3 +66,6 @@ class Scrape(Resource):
 
         robot_data = await self.client.create_robot({"meta": meta, "workflow": []})
         return Robot(self.client, robot_data)
+
+    #: ``await maxun.scrape(name, url, ...)`` is the same as ``create``.
+    __call__ = create

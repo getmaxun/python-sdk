@@ -26,19 +26,19 @@ LLM = {
 async def main():
     async with Maxun() as maxun:
         # With a URL
-        robot = await maxun.extract.from_prompt(
-            "Extract the first 15 company names, descriptions and batch",
+        robot = await maxun.extract(
+            "YC Companies (prompt)",
+            prompt="Extract the first 15 company names, descriptions and batch",
             url="https://www.ycombinator.com/companies",
-            name="YC Companies (prompt)",
             **LLM,
         )
         result = await robot.run()
         print(json.dumps(result.list_data[:3], indent=2))
 
         # Without a URL, Maxun searches for a suitable page first
-        robot = await maxun.extract.from_prompt(
-            "Company names and descriptions from the Y Combinator companies directory",
-            name="YC Companies (auto-search)",
+        robot = await maxun.extract(
+            "YC Companies (auto-search)",
+            prompt="Company names and descriptions from the Y Combinator companies directory",
             **LLM,
         )
         print(f"Robot built for {robot.url}")

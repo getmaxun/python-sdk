@@ -101,6 +101,8 @@ class _LoopThread:
         if self.loop.is_running():
             self.loop.call_soon_threadsafe(self.loop.stop)
             self.thread.join(timeout=5)
+        if not self.loop.is_running() and not self.loop.is_closed():
+            self.loop.close()
 
 
 _WRAP_TYPES = (Robot, Resource, ExtractBuilder)
@@ -133,6 +135,12 @@ class _SyncProxy:
                 return self._wrap(attr(*args, **kwargs))
             return plain
         return self._wrap(attr)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        result = self._target(*args, **kwargs)
+        if inspect.isawaitable(result) and not isinstance(result, _WRAP_TYPES):
+            result = self._runner.run(result)
+        return self._wrap(result)
 
     def __setattr__(self, name: str, value: Any) -> None:
         setattr(self._target, name, value)

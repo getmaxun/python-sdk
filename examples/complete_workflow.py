@@ -11,7 +11,7 @@ load_dotenv()
 async def main():
     async with Maxun() as maxun:
         robot = await (
-            maxun.extract.create("Trending Books Daily")
+            maxun.extract("Trending Books Daily")
             .navigate("https://openlibrary.org/trending/daily")
             .capture_list({"selector": "li.searchResultItem", "max_items": 25})
             .monitor_changes()

@@ -9,7 +9,7 @@ load_dotenv()
 
 async def main():
     async with Maxun() as maxun:
-        robot = await maxun.crawl.create(
+        robot = await maxun.crawl(
             "YC Blog Crawler",
             "https://www.ycombinator.com/blog",
             CrawlConfig(

@@ -14,7 +14,7 @@ from maxun import Maxun
 
 async def main():
     async with Maxun(api_key="your-api-key") as maxun:
-        robot = await maxun.scrape.create("Example", "https://example.com")
+        robot = await maxun.scrape("Example", "https://example.com")
         result = await robot.run()
         print(result.markdown)
 
@@ -55,30 +55,30 @@ The SDK reads real environment variables. To use a `.env` file, call `load_doten
 
 Everything hangs off it:
 
-| | Creates | Result is in |
+| Call | Creates | Result is in |
 |---|---|---|
-| `maxun.scrape` | a robot that turns one page into markdown/html/text/links/summary/screenshots | `result.markdown`, `.html`, `.text`, `.links`, `.summary`, `.screenshots` |
-| `maxun.extract` | a robot that captures specific data, by selectors or from a prompt | `result.text_data`, `result.list_data` |
-| `maxun.crawl` | a robot that visits many pages of a site | `result.crawl_data` |
-| `maxun.search` | a robot that searches the web (DuckDuckGo) | `result.search_data` |
-| `maxun.documents` | a robot that reads a PDF, DOCX, XLSX, CSV, JPG or PNG | `result.document_data` or `result.markdown` etc. |
+| `maxun.scrape(name, url)` | a robot that turns one page into markdown/html/text/links/summary/screenshots | `result.markdown`, `.html`, `.text`, `.links`, `.summary`, `.screenshots` |
+| `maxun.extract(name)` or `maxun.extract(name, prompt=...)` | a robot that captures specific data, by selectors or from a prompt | `result.text_data`, `result.list_data` |
+| `maxun.crawl(name, url)` | a robot that visits many pages of a site | `result.crawl_data` |
+| `maxun.search(name, query)` | a robot that searches the web (DuckDuckGo) | `result.search_data` |
+| `maxun.documents.extract(file, prompt)` / `.parse(file)` | a robot that reads a PDF, DOCX, XLSX, CSV, JPG or PNG | `result.document_data` / `result.markdown` etc. |
 | `maxun.robots` | nothing; lists, finds and deletes robots of any type | |
 
-Every `create` returns a `Robot`. Robots are saved on your account; run them as often as you like.
+Each call returns a `Robot`, saved on your account; run it as often as you like. `maxun.scrape.create(...)`, `maxun.crawl.create(...)` etc. still work and do the same thing.
 
 **Reusing a robot name** behaves differently per robot type:
 
 - Scrape, crawl and prompt-extract robots: the same name with the same settings returns the existing robot; different settings raise `ConflictError`.
 - Selector-extract robots: the same name and URL returns the existing robot **unchanged, even if your steps differ**. The SDK warns when this happens. Use a new name or delete the old robot to save new steps.
 - Document robots: an existing name always raises `ConflictError`.
-- Search robots: names are not checked, so every `create` makes a new robot.
+- Search robots: names are not checked, so every call makes a new robot.
 
 ## What you can build
 
 ### Scrape
 
 ```python
-robot = await maxun.scrape.create(
+robot = await maxun.scrape(
     "Pricing page",
     "https://example.com/pricing",
     formats=["markdown", "links", "screenshot-fullpage"],
@@ -94,8 +94,8 @@ Formats: `markdown` (default), `html`, `text`, `links`, `summary`, `screenshot-v
 **Smart Queries** ask an LLM a question about the page on every run:
 
 ```python
-robot = await maxun.scrape.create("HN", "https://news.ycombinator.com",
-                                  smart_queries="Which story has the most points?")
+robot = await maxun.scrape("HN", "https://news.ycombinator.com",
+                           smart_queries="Which story has the most points?")
 result = await robot.run()
 result.smart_query_result
 
@@ -111,7 +111,7 @@ Chain the steps and finish with `.build()`:
 
 ```python
 robot = await (
-    maxun.extract.create("Products")
+    maxun.extract("Products")
     .navigate("https://shop.example.com")
     .capture_text({"Store name": "h1", "Tagline": ".hero p"})
     .capture_list({"selector": "article.product", "max_items": 50})
@@ -151,10 +151,10 @@ Other steps, in the order you want them to happen:
 Describe the data; Maxun builds the robot:
 
 ```python
-robot = await maxun.extract.from_prompt(
-    "Company names, descriptions and batch for the first 15 companies",
+robot = await maxun.extract(
+    "YC companies",
+    prompt="Company names, descriptions and batch for the first 15 companies",
     url="https://www.ycombinator.com/companies",   # optional: without it Maxun searches for a page
-    name="YC companies",
 )
 result = await robot.run()
 result.list_data
@@ -165,7 +165,7 @@ result.list_data
 ```python
 from maxun import CrawlConfig
 
-robot = await maxun.crawl.create(
+robot = await maxun.crawl(
     "Docs crawler",
     "https://docs.example.com",
     CrawlConfig(mode="domain", limit=100, max_depth=3, include_paths=["/guides/*"]),
@@ -183,7 +183,7 @@ for page in result.crawl_data:
 ```python
 from maxun import SearchConfig
 
-robot = await maxun.search.create(
+robot = await maxun.search(
     "AI news",
     SearchConfig(query="AI model releases", mode="discover", time_range="week", limit=10),
 )
@@ -194,7 +194,7 @@ result.search_data
 - `mode="discover"` returns titles, URLs and snippets.
 - `mode="scrape"` (the default) also opens each result and scrapes it in `formats` (default `["markdown"]`).
 - `time_range`: `"day"`, `"week"`, `"month"` or `"year"`. `limit` defaults to 10.
-- Shorthand: `await maxun.search.create("AI news", "AI model releases")`.
+- Shorthand: `await maxun.search("AI news", "AI model releases")`.
 
 ### Documents
 
@@ -234,12 +234,13 @@ If the run fails or is aborted, `run()` raises `RunFailedError`.
 | `markdown`, `html`, `text`, `summary`, `links` | scrape and document-parse robots, in the formats you chose |
 | `smart_query_result` | scrape robots with Smart Queries |
 | `text_data` (dict) | `capture_text` |
-| `list_data` (list) | `capture_list`, `from_prompt` |
+| `list_data` (list) | `capture_list`, prompt extraction |
 | `crawl_data` (list, one item per page) | crawl robots |
 | `search_data` (dict) | search robots |
 | `document_data` | document-extract robots |
 | `screenshots` (list) | screenshot formats and `capture_screenshot` |
 | `has_changes`, `changed_formats` | robots with change monitoring |
+| `changed_pages` | crawl robots with change monitoring |
 
 `RunResult` is also a regular dict, so `result["data"]["listData"]` works too.
 
@@ -307,25 +308,51 @@ await robot.remove_webhooks()                              # all
 
 ### Change monitoring
 
-Compare every run with the previous successful run:
+Scrape, crawl and extract robots can compare every run with the previous successful run. Turn it on with `monitor=True`:
 
 ```python
-robot = await maxun.scrape.create("Prices", "https://example.com/pricing", formats=["text"], monitor=True)
-# or: await robot.set_monitoring(True)   /   builder: .monitor_changes()
+robot = await maxun.scrape("Prices", "https://example.com/pricing", formats=["text"], monitor=True)
+robot = await maxun.crawl("Docs", "https://docs.example.com", monitor=True)
+robot = await maxun.extract("Products", monitor=True).navigate(url).capture_list({...}).build()
+robot = await maxun.extract("Products", prompt="Product names and prices", url=url, monitor=True)
 
+# or on an existing robot
+await robot.set_monitoring(True)       # set_monitoring(False) turns it off
+```
+
+The first run is the baseline. After that, every run tells you what changed:
+
+```python
 result = await robot.run()
 if result.has_changes:
-    diff = await robot.get_run_diff(result.run_id)          # or format="text"
+    print(result.changed_formats)      # e.g. ["markdown"], or ["captured-list"] for extract robots
+    diff = await robot.get_run_diff(result.run_id)          # optionally format="markdown"
     for d in diff["diffs"]:
         for change in d["changes"]:
             if change["added"] or change["removed"]:
                 print("+" if change["added"] else "-", change["value"])
 ```
 
+What gets compared:
+
+| Robot | Compared | `format=` values |
+|---|---|---|
+| Scrape | the page's `text`, `markdown` and `html` output | `text`, `markdown`, `html` |
+| Crawl | every page's `text`, `markdown` and `html`, matched by URL | `text`, `markdown`, `html` |
+| Extract | the captured text and lists | `captured-text`, `captured-list` |
+
+For crawl robots, `result.changed_pages` and `diff["pages"]` also list which page URLs were `added`, `removed` or `changed`.
+
+Crawl comparison is done by the SDK, because the Maxun server only compares scrape and extract runs. The result has the same shape either way. For crawl robots:
+
+- `robot.get_run_diff(run_id)` works for any run, including scheduled ones.
+- `has_changes` is filled in only for runs started with `robot.run()`.
+- Webhook payloads and the Maxun dashboard do not show crawl changes.
+
 ## LLM settings: Cloud vs self-hosted
 
 These features use an LLM:
-- `extract.from_prompt`
+- prompt extraction, `extract(name, prompt=...)`
 - `documents.extract`
 - the `summary` format
 - Smart Queries
@@ -335,8 +362,9 @@ These features use an LLM:
 **Self-hosted Maxun** has no built-in model, so these features need an LLM configuration:
 
 ```python
-robot = await maxun.extract.from_prompt(
-    "Product names and prices",
+robot = await maxun.extract(
+    "Products",
+    prompt="Product names and prices",
     url="https://shop.example.com",
     llm_provider="anthropic",          # "anthropic", "openai" or "ollama"
     llm_api_key="sk-ant-...",          # required for anthropic and openai
@@ -346,7 +374,7 @@ robot = await maxun.extract.from_prompt(
 ```
 
 The same four arguments are accepted by:
-- `scrape.create`, `crawl.create` and `search.create` (used for `summary` and Smart Queries)
+- `maxun.scrape(...)`, `maxun.crawl(...)` and `maxun.search(...)` (used for `summary` and Smart Queries)
 - `documents.extract` and `documents.parse`
 
 ## Errors
@@ -367,7 +395,7 @@ Invalid arguments caught before any request (a bad format name, a missing URL) r
 from maxun import MaxunError, ConflictError
 
 try:
-    robot = await maxun.scrape.create("Pricing page", "https://example.com/pricing")
+    robot = await maxun.scrape("Pricing page", "https://example.com/pricing")
 except ConflictError:
     robot = await maxun.robots.find("Pricing page")
 except MaxunError as e:
@@ -382,11 +410,11 @@ except MaxunError as e:
 from maxun import MaxunSync
 
 with MaxunSync() as maxun:
-    robot = maxun.scrape.create("Example", "https://example.com")
+    robot = maxun.scrape("Example", "https://example.com")
     print(robot.run().markdown)
 
     robot = (
-        maxun.extract.create("HN")
+        maxun.extract("HN")
         .navigate("https://news.ycombinator.com")
         .capture_list({"selector": "tr.athing", "max_items": 10})
         .build()

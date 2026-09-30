@@ -22,7 +22,6 @@ class Search(Resource):
         llm_model: Optional[str] = None,
         llm_api_key: Optional[str] = None,
         llm_base_url: Optional[str] = None,
-        monitor: Optional[bool] = None,
     ) -> Robot:
         """Create a search robot. Run it with ``await robot.run()`` and read
         ``result.search_data``.
@@ -33,7 +32,6 @@ class Search(Resource):
         :param formats: What to capture from each result in scrape mode.
             Defaults to ["markdown"].
         :param llm_*: Self-hosted Maxun only, needed for the ``summary`` format.
-        :param monitor: Compare every run with the previous one.
         """
         if isinstance(search_config, str):
             search_config = SearchConfig(query=search_config)
@@ -62,4 +60,7 @@ class Search(Resource):
                 **build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url),
             }
         )
-        return await self._after_create(robot_data, monitor)
+        return Robot(self.client, robot_data)
+
+    #: ``await maxun.search(name, query_or_config, ...)`` is the same as ``create``.
+    __call__ = create

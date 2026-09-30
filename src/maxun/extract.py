@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Awaitable, Optional, Union
 
 from ._resource import Resource
 from .builders.extract_builder import ExtractBuilder
@@ -12,6 +12,39 @@ class Extract(Resource):
     (``create()``) or from a plain-English prompt (``from_prompt()``)."""
 
     robot_types = ("extract",)
+
+    def __call__(
+        self,
+        name: str,
+        prompt: Optional[str] = None,
+        url: Optional[str] = None,
+        *,
+        monitor: Optional[bool] = None,
+        **llm: Any,
+    ) -> Union[ExtractBuilder, Awaitable[Robot]]:
+        """Create an extraction robot.
+
+        With only a name, returns a builder for a selector-based robot::
+
+            robot = await maxun.extract("Products").navigate(url).capture_list({...}).build()
+
+        With a ``prompt``, builds the robot from plain English::
+
+            robot = await maxun.extract("Products", prompt="Product names and prices", url=url)
+
+        ``llm_provider``/``llm_model``/``llm_api_key``/``llm_base_url`` are accepted
+        with a prompt (self-hosted Maxun only).
+        """
+        if prompt is None:
+            if url is not None or llm:
+                raise TypeError(
+                    "url and llm_* go with prompt=...; for a selector robot use .navigate(url) on the builder."
+                )
+            builder = self.create(name)
+            if monitor is not None:
+                builder.monitor_changes(monitor)
+            return builder
+        return self.from_prompt(prompt, url=url, name=name, monitor=monitor, **llm)
 
     def create(self, name: str) -> ExtractBuilder:
         """Start building a selector-based robot::

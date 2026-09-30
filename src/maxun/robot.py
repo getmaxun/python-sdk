@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from ._monitoring import compare_crawl, crawl_diff, crawl_pages, previous_successful_run
 from ._utils import warn
 from .client import Client
 from .types import ExecutionOptions, Format, MaxunError, ScheduleConfig, WebhookConfig
@@ -21,6 +22,9 @@ def _parse_time(value: Any) -> Optional[datetime]:
     return None
 
 
+MONITORABLE_TYPES = ("scrape", "crawl", "extract")
+
+
 class RunResult(dict):
     """The result of ``robot.run()``.
 
@@ -38,6 +42,7 @@ class RunResult(dict):
     - ``document_data`` - data pulled from a file by a document-extract robot
     - ``screenshots`` - screenshots taken during the run
     - ``has_changes``, ``changed_formats`` - monitoring results
+    - ``changed_pages`` - crawl robots: ``{"added", "removed", "changed"}`` page URLs
     """
 
     @property
@@ -107,6 +112,10 @@ class RunResult(dict):
     @property
     def changed_formats(self) -> List[str]:
         return self.get("changedFormats") or []
+
+    @property
+    def changed_pages(self) -> Dict[str, List[str]]:
+        return self.get("changedPages") or {"added": [], "removed": [], "changed": []}
 
 
 class Robot:
@@ -184,7 +193,34 @@ class Robot:
                 merged[key] = value
         result = RunResult(await self.client.execute_robot(self.id, merged))
         await self._add_missing_outputs(result, merged.get("formats") or self.formats)
+        if self.type == "crawl" and self.is_monitoring:
+            await self._compare_crawl_run(result)
         return result
+
+    async def _compare_crawl_run(self, result: RunResult) -> None:
+        """The server does not compare crawl runs, so the SDK does it."""
+        if not result.run_id:
+            return
+        try:
+            runs = await self.get_runs()
+        except MaxunError as e:
+            warn(f"The run succeeded but could not be compared with the previous run: {e}")
+            return
+        current = next((r for r in runs if r.get("runId") == result.run_id), None)
+        output = (current or {}).get("serializableOutput") or {}
+        if "_comparison" in output:
+            return  # the server compared it
+        previous = previous_successful_run(runs, result.run_id)
+        if previous is None:
+            result["changedPages"] = {"added": [], "removed": [], "changed": []}
+            return
+        changed_formats, pages = compare_crawl(
+            crawl_pages((previous.get("serializableOutput") or {}).get("crawl")),
+            crawl_pages(output.get("crawl")) or result.crawl_data,
+        )
+        result["hasChanges"] = bool(changed_formats)
+        result["changedFormats"] = changed_formats
+        result["changedPages"] = pages
 
     async def _add_missing_outputs(self, result: RunResult, formats: List[str]) -> None:
         """The run endpoint leaves out links and document-extract data, so read
@@ -231,16 +267,31 @@ class Robot:
     # ---------- monitoring ----------
 
     async def set_monitoring(self, enabled: bool = True) -> None:
-        """Turn change monitoring on or off. When on, every run is compared with
-        the previous successful run; see ``result.has_changes`` and ``get_run_diff``."""
+        """Turn change monitoring on or off (scrape, crawl and extract robots).
+        When on, every run is compared with the previous successful run; see
+        ``result.has_changes`` and ``get_run_diff``."""
+        if enabled and self.type not in MONITORABLE_TYPES:
+            raise ValueError(
+                f"Change monitoring works for scrape, crawl and extract robots, not {self.type} robots."
+            )
         await self.update({"meta": {"compareRuns": bool(enabled)}})
 
     async def get_run_diff(self, run_id: str, format: Optional[str] = None) -> dict:
         """What changed between a run and the previous successful run.
 
-        ``format`` limits the diff to one output (e.g. ``"markdown"``,
-        ``"captured-text"``, ``"captured-list"``).
+        ``format`` limits the diff to one output: ``"markdown"``, ``"text"`` or
+        ``"html"`` for scrape and crawl robots, ``"captured-text"`` or
+        ``"captured-list"`` for extract robots. Crawl diffs also list the
+        ``pages`` that were added, removed or changed.
         """
+        if self.type == "crawl":
+            runs = await self.get_runs()
+            current = next((r for r in runs if r.get("runId") == run_id), None)
+            if current is None:
+                current = await self.client.get_run(self.id, run_id)
+            output = current.get("serializableOutput") or {}
+            if "_comparison" not in output:
+                return crawl_diff(run_id, previous_successful_run(runs, run_id), output.get("crawl"), format)
         return await self.client.get_run_diff(self.id, run_id, format)
 
     # ---------- schedule ----------

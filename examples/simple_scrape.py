@@ -9,7 +9,7 @@ load_dotenv()  # reads MAXUN_API_KEY / MAXUN_BASE_URL from ../.env
 
 async def main():
     async with Maxun() as maxun:
-        robot = await maxun.scrape.create(
+        robot = await maxun.scrape(
             "Example Domain Scraper",
             "https://example.com",
             formats=["markdown", "text", "screenshot-visible"],

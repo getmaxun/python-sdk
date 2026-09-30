@@ -462,3 +462,129 @@ def test_sync_init_failure_stops_thread(monkeypatch):
     with pytest.raises(ValueError):
         MaxunSync()
     assert threading.active_count() == before
+
+
+# ---------- callable resources ----------
+
+async def test_resources_are_callable(mock, maxun):
+    scrape = mock.post("robots").respond(201, json={"data": robot_record()})
+    robot = await maxun.scrape("S", "https://e.com", formats=["text"], monitor=True)
+    assert robot.id == "r1" and body(scrape)["meta"]["formats"] == ["text"]
+    assert body(scrape)["meta"]["compareRuns"] is True
+
+    crawl = mock.post("crawl").respond(201, json={"data": robot_record(type_="crawl")})
+    await maxun.crawl("C", "https://e.com", {"limit": 5})
+    assert body(crawl)["crawlConfig"]["limit"] == 5
+
+    search = mock.post("search").respond(201, json={"data": robot_record(type_="search")})
+    await maxun.search("Q", "some query")
+    assert body(search)["searchConfig"]["query"] == "some query"
+
+    await maxun.extract("E", monitor=True).navigate("https://e.com").capture_text({"T": "h1"}).build()
+    assert body(scrape)["meta"] == {"name": "E", "type": "extract", "compareRuns": True}
+
+    llm = mock.post("extract/llm").respond(json={"data": {"robotId": "r1"}})
+    mock.get("robots/r1").respond(json={"data": robot_record(type_="extract")})
+    await maxun.extract("P", prompt="prices", url="https://e.com", llm_provider="ollama")
+    assert body(llm) == {"prompt": "prices", "url": "https://e.com", "robotName": "P", "llmProvider": "ollama"}
+
+    with pytest.raises(TypeError):
+        maxun.extract("E", url="https://e.com")
+
+
+def test_sync_callable(mock):
+    mock.post("robots").respond(201, json={"data": robot_record()})
+    mock.post("extract/llm").respond(json={"data": {"robotId": "r1"}})
+    mock.get("robots/r1").respond(json={"data": robot_record(type_="extract")})
+    with MaxunSync(api_key="k", base_url=BASE) as m:
+        assert m.scrape("S", "https://e.com").id == "r1"
+        assert m.extract("P", prompt="prices").type == "extract"
+        assert m.extract("E").navigate("https://e.com").capture_text({"T": "h1"}).build().id == "r1"
+
+
+# ---------- monitoring ----------
+
+def crawl_run(run_id, started, pages, status="success", comparison=None):
+    out = {"crawl": {"Crawl": pages}}
+    if comparison is not None:
+        out["_comparison"] = comparison
+    return {"runId": run_id, "status": status, "startedAt": started, "serializableOutput": out}
+
+
+PAGES_V1 = [{"metadata": {"url": "https://e.com/a"}, "markdown": "A one"},
+            {"metadata": {"url": "https://e.com/b"}, "markdown": "B"}]
+PAGES_V2 = [{"metadata": {"url": "https://e.com/a"}, "markdown": "A two"},
+            {"metadata": {"url": "https://e.com/c"}, "markdown": "C"}]
+
+
+async def test_crawl_monitoring_in_sdk(mock, maxun):
+    mock.get("robots/c1").respond(json={"data": robot_record("c1", type_="crawl", compareRuns=True)})
+    mock.post("robots/c1/execute").respond(json={"data": {**RUN_RESULT, "runId": "new",
+                                                           "data": {"crawlData": PAGES_V2}}})
+    mock.get("robots/c1/runs").respond(json={"data": [
+        crawl_run("new", "2026-09-30T10:00:00Z", PAGES_V2),
+        crawl_run("broken", "2026-09-30T09:00:00Z", [], status="failed"),
+        crawl_run("old", "2026-09-29T10:00:00Z", PAGES_V1),
+    ]})
+    server_diff = mock.get("robots/c1/runs/new/diff")
+    robot = await maxun.robots.get("c1")
+
+    result = await robot.run()
+    assert result.has_changes and result.changed_formats == ["markdown"]
+    assert result.changed_pages == {"added": ["https://e.com/c"], "removed": ["https://e.com/b"],
+                                    "changed": ["https://e.com/a"]}
+
+    diff = await robot.get_run_diff("new")
+    assert not server_diff.called
+    assert diff["previousRunId"] == "old" and diff["changedFormats"] == ["markdown"]
+    added = "".join(c["value"] for c in diff["diffs"][0]["changes"] if c["added"])
+    removed = "".join(c["value"] for c in diff["diffs"][0]["changes"] if c["removed"])
+    assert "A two" in added and "## https://e.com/c" in added
+    assert "A one" in removed and "## https://e.com/b" in removed
+
+
+async def test_crawl_first_run_and_unchanged(mock, maxun):
+    mock.get("robots/c1").respond(json={"data": robot_record("c1", type_="crawl", compareRuns=True)})
+    mock.post("robots/c1/execute").respond(json={"data": {**RUN_RESULT, "runId": "new"}})
+    runs = mock.get("robots/c1/runs")
+    robot = await maxun.robots.get("c1")
+
+    runs.respond(json={"data": [crawl_run("new", "2026-09-30T10:00:00Z", PAGES_V1)]})
+    assert not (await robot.run()).has_changes
+
+    runs.respond(json={"data": [crawl_run("new", "2026-09-30T10:00:00Z", PAGES_V1),
+                                crawl_run("old", "2026-09-29T10:00:00Z", PAGES_V1)]})
+    result = await robot.run()
+    assert not result.has_changes and result.changed_pages["changed"] == []
+
+
+async def test_crawl_defers_to_server_comparison(mock, maxun):
+    mock.get("robots/c1").respond(json={"data": robot_record("c1", type_="crawl", compareRuns=True)})
+    mock.post("robots/c1/execute").respond(json={"data": {**RUN_RESULT, "runId": "new", "hasChanges": True,
+                                                           "changedFormats": ["text"]}})
+    mock.get("robots/c1/runs").respond(json={"data": [
+        crawl_run("new", "2026-09-30T10:00:00Z", PAGES_V2, comparison={"changedFormats": ["text"]}),
+        crawl_run("old", "2026-09-29T10:00:00Z", PAGES_V1)]})
+    server_diff = mock.get("robots/c1/runs/new/diff").respond(json={"data": {"runId": "new", "diffs": []}})
+    robot = await maxun.robots.get("c1")
+    assert (await robot.run()).changed_formats == ["text"]
+    await robot.get_run_diff("new")
+    assert server_diff.called
+
+
+async def test_unmonitored_crawl_skips_comparison(mock, maxun):
+    mock.get("robots/c1").respond(json={"data": robot_record("c1", type_="crawl")})
+    mock.post("robots/c1/execute").respond(json={"data": RUN_RESULT})
+    runs = mock.get("robots/c1/runs")
+    robot = await maxun.robots.get("c1")
+    await robot.run()
+    assert not runs.called
+
+
+async def test_monitoring_only_for_supported_types(mock, maxun):
+    mock.get("robots/s1").respond(json={"data": robot_record("s1", type_="search")})
+    robot = await maxun.robots.get("s1")
+    with pytest.raises(ValueError, match="scrape, crawl and extract"):
+        await robot.set_monitoring(True)
+    with pytest.raises(TypeError):
+        await maxun.search.create("Q", "query", monitor=True)
