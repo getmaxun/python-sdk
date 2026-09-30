@@ -16,7 +16,7 @@ from maxun import (
     RunFailedError, Scrape, ScheduleConfig, SearchConfig, ValidationError, WebhookConfig,
 )
 
-BASE = "https://maxun.test/api/sdk/"
+BASE = "http://localhost:8080/api/sdk"
 
 
 def robot_record(robot_id="r1", type_="scrape", **meta):
