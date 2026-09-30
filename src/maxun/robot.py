@@ -1,7 +1,24 @@
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from ._utils import warn
 from .client import Client
 from .types import ExecutionOptions, Format, MaxunError, ScheduleConfig, WebhookConfig
+
+
+def _parse_time(value: Any) -> Optional[datetime]:
+    """Run times come back as ISO strings or as "9/30/2026, 10:00:00 AM"."""
+    if not isinstance(value, str):
+        return None
+    for parse in (
+        lambda v: datetime.fromisoformat(v.replace("Z", "+00:00")).replace(tzinfo=None),
+        lambda v: datetime.strptime(v, "%m/%d/%Y, %I:%M:%S %p"),
+    ):
+        try:
+            return parse(value)
+        except ValueError:
+            continue
+    return None
 
 
 class RunResult(dict):
@@ -127,7 +144,8 @@ class Robot:
 
     @property
     def formats(self) -> List[str]:
-        return list(self.meta.get("formats") or [])
+        recording = self.robot_data.get("recording") or {}
+        return list(self.meta.get("formats") or recording.get("outputFormats") or [])
 
     @property
     def is_monitoring(self) -> bool:
@@ -175,7 +193,11 @@ class Robot:
         is_document = self.type == "doc-extract"
         if not (wants_links or is_document) or not result.run_id:
             return
-        run = await self.client.get_run(self.id, result.run_id)
+        try:
+            run = await self.client.get_run(self.id, result.run_id)
+        except MaxunError as e:
+            warn(f"The run succeeded but its links/document data could not be loaded: {e}")
+            return
         output = run.get("serializableOutput") or {}
         data = dict(result.data)
         if wants_links:
@@ -190,7 +212,10 @@ class Robot:
     async def get_runs(self) -> List[dict]:
         """All runs of this robot, newest first."""
         runs = await self.client.get_runs(self.id)
-        return sorted(runs, key=lambda r: r.get("startedAt") or "", reverse=True)
+        keys = [_parse_time(r.get("startedAt")) for r in runs]
+        if runs and all(k is not None for k in keys):
+            return [r for _, r in sorted(zip(keys, runs), key=lambda pair: pair[0], reverse=True)]
+        return runs  # the server already returns newest first
 
     async def get_run(self, run_id: str) -> dict:
         return await self.client.get_run(self.id, run_id)

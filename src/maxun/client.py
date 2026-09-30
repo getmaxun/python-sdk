@@ -224,9 +224,15 @@ class Client:
         if monitor is not None:
             meta["compareRuns"] = bool(monitor)
         payload = {**workflow_file, "meta": meta}
-        data = await self._data("POST", "robots", json=payload, timeout=120)
+        body = await self._request("POST", "robots", json=payload, timeout=120)
+        data = body.get("data") if isinstance(body, dict) else None
         if not data:
             raise MaxunError("Failed to create robot")
+        if body.get("existing") and robot_type == "extract":
+            warn(
+                f'A robot named "{meta.get("name")}" already exists for this URL, so it was returned '
+                "unchanged and your new steps were NOT saved. Use a different name, or delete the old robot first."
+            )
         return data
 
     async def update_robot(self, robot_id: str, updates: dict) -> dict:

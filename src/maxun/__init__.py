@@ -39,5 +39,5 @@ __all__ = [
     "Robot", "RunResult", "Scrape", "Search", "ExtractBuilder", "WorkflowBuilder",
     "create_llm_provider", "BaseLLMProvider", "AnthropicProvider", "OpenAIProvider",
     "OllamaProvider", "LLMConfig", "LLMMessage", "LLMResponse",
-    *_types_all,
+    *[name for name in _types_all if name not in ("RunResult",)],
 ]

@@ -419,3 +419,46 @@ async def test_run_fills_links_and_document_data(mock, maxun):
         "scrapeDoc": {"data": {"total": 10}}}}})
     doc = await maxun.robots.get("d1")
     assert (await doc.run()).document_data == {"total": 10}
+
+
+def test_runresult_export_is_the_class():
+    import maxun
+    from maxun.robot import RunResult
+    assert maxun.RunResult is RunResult
+
+
+async def test_doc_parse_links(mock, maxun):
+    rec = robot_record("p1", type_="doc-parse")
+    rec["recording"]["outputFormats"] = ["markdown", "links"]
+    mock.get("robots/p1").respond(json={"data": rec})
+    mock.post("robots/p1/execute").respond(json={"data": RUN_RESULT})
+    mock.get("robots/p1/runs/run1").respond(json={"data": {"serializableOutput": {"links": ["https://x"]}}})
+    robot = await maxun.robots.get("p1")
+    assert robot.formats == ["markdown", "links"]
+    assert (await robot.run()).links == ["https://x"]
+
+
+async def test_existing_extract_robot_warns(mock, maxun):
+    mock.post("robots").respond(200, json={"data": robot_record(type_="extract"), "existing": True})
+    with pytest.warns(UserWarning, match="NOT saved"):
+        await maxun.extract.create("E").navigate("https://e.com").capture_text({"T": "h1"}).build()
+
+
+async def test_runs_sorted_by_real_time(mock, maxun):
+    mock.get("robots/r1").respond(json={"data": robot_record()})
+    mock.get("robots/r1/runs").respond(json={"data": [
+        {"runId": "a", "startedAt": "9/30/2026, 9:00:00 AM"},
+        {"runId": "b", "startedAt": "10/1/2026, 1:00:00 AM"},
+        {"runId": "c", "startedAt": "9/30/2026, 11:00:00 PM"},
+    ]})
+    robot = await maxun.robots.get("r1")
+    assert [r["runId"] for r in await robot.get_runs()] == ["b", "c", "a"]
+
+
+def test_sync_init_failure_stops_thread(monkeypatch):
+    import threading
+    monkeypatch.delenv("MAXUN_API_KEY", raising=False)
+    before = threading.active_count()
+    with pytest.raises(ValueError):
+        MaxunSync()
+    assert threading.active_count() == before

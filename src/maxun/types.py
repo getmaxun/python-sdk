@@ -15,7 +15,7 @@ __all__ = [
     "Config", "ScheduleConfig", "WebhookConfig", "ExecutionOptions",
     "ExtractFields", "PaginationConfig", "ExtractListConfig",
     "CrawlConfig", "CrawlOptions", "SearchConfig", "SearchOptions",
-    "Workflow", "WorkflowFile", "RobotData", "Run", "RunResult", "ApiResponse",
+    "Workflow", "WorkflowFile", "RobotData", "Run", "ApiResponse",
     "ListLimitUpdate",
     "MaxunError", "AuthenticationError", "NotFoundError", "ConflictError",
     "ValidationError", "RunFailedError",
@@ -236,7 +236,7 @@ Workflow = List[Dict[str, Any]]
 WorkflowFile = Dict[str, Any]
 RobotData = Dict[str, Any]
 Run = Dict[str, Any]
-RunResult = Dict[str, Any]
+RunResult = Dict[str, Any]  # raw shape; maxun.RunResult is the class in robot.py
 ApiResponse = Dict[str, Any]
 
 

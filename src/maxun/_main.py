@@ -162,10 +162,14 @@ class MaxunSync:
         config: Optional[Config] = None,
     ):
         self._runner = _LoopThread()
-        # The async client must be created on the loop that will use it.
-        self._async = self._runner.run(
-            _create(api_key=api_key, base_url=base_url, team_id=team_id, timeout=timeout, config=config)
-        )
+        try:
+            # The async client must be created on the loop that will use it.
+            self._async = self._runner.run(
+                _create(api_key=api_key, base_url=base_url, team_id=team_id, timeout=timeout, config=config)
+            )
+        except BaseException:
+            self._runner.stop()
+            raise
         for name in ("scrape", "crawl", "search", "extract", "documents", "robots"):
             setattr(self, name, _SyncProxy(getattr(self._async, name), self._runner))
         self.config = self._async.config

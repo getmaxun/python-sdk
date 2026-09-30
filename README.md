@@ -66,7 +66,12 @@ Everything hangs off it:
 
 Every `create` returns a `Robot`. Robots are saved on your account; run them as often as you like.
 
-Robot names are unique. Creating a robot with a name that exists and **the same settings** returns the existing robot; different settings raise `ConflictError`.
+**Reusing a robot name** behaves differently per robot type:
+
+- Scrape, crawl and prompt-extract robots: the same name with the same settings returns the existing robot; different settings raise `ConflictError`.
+- Selector-extract robots: the same name and URL returns the existing robot **unchanged, even if your steps differ**. The SDK warns when this happens. Use a new name or delete the old robot to save new steps.
+- Document robots: an existing name always raises `ConflictError`.
+- Search robots: names are not checked, so every `create` makes a new robot.
 
 ## What you can build
 
@@ -243,7 +248,7 @@ If the run fails or is aborted, `run()` raises `RunFailedError`.
 ```python
 await maxun.robots.list()                  # all robots
 await maxun.robots.list(type="crawl")      # one type: extract, scrape, crawl, search, doc-extract, doc-parse
-await maxun.scrape.list()                  # same thing, from the resource
+await maxun.scrape.list()                  # only scrape robots (every resource has list/get/delete)
 robot = await maxun.robots.get("robot-id")
 robot = await maxun.robots.find("Pricing page")   # by exact name
 await maxun.robots.delete("robot-id")
@@ -407,6 +412,11 @@ Existing code keeps working. `Extract(Config(...))`, `Scrape(...)`, `Crawl(...)`
 - **`CrawlConfig`/`SearchConfig`** now have working defaults. Before, leaving out `limit` or `max_depth` crawled nothing.
 - **`schedule()`, `add_webhook()` and `run()`** accept the `ScheduleConfig`, `WebhookConfig` and `ExecutionOptions` classes, not only camelCase dicts.
 - **`Config`** reads `MAXUN_API_KEY`/`MAXUN_BASE_URL`/`MAXUN_TEAM_ID` when arguments are left out.
+- **Return values:**
+  - `robot.get_webhooks()` returns `[]` instead of `None` when there are none.
+  - `robot.schedule()` returns the saved schedule and `robot.add_webhook()` returns the saved webhook; both used to return `None`.
+- **Document formats:** `create_document_parse_robot` raises `ValueError` for unknown formats instead of silently dropping them.
+- **`from maxun import *`** exports only the public API, not `typing` helpers such as `Optional` or `List`.
 
 ## Examples
 
