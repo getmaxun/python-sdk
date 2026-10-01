@@ -114,69 +114,89 @@ def result_from_run(raw: dict, monitored: Optional[bool] = None) -> "RunResult":
 class Run(dict):
     """One run of a robot.
 
-    Printing it shows only the summary fields. The run's output is in
-    ``run.result`` (a :class:`RunResult`, like the one ``robot.run()`` returns).
-    It is still the raw server record underneath, so ``run["runId"]``,
-    ``"status" in run``, ``dict(run)`` and ``json.dumps(run)`` keep working.
+    It is a plain dict of the run's summary, so printing it or ``json.dumps``
+    gives exactly::
+
+        {"id": "...", "runId": "...", "robotId": "...", "name": "Example",
+         "status": "success", "startedAt": "2026-10-01T00:46:25Z", "finishedAt": "2026-10-01T00:47:14Z"}
+
+    Times are ISO 8601 in UTC. The run's output is in ``run.result`` (a
+    :class:`RunResult`, like the one ``robot.run()`` returns) and the raw server
+    record in ``run.get_data()``. Other raw fields, like
+    ``run["serializableOutput"]``, can still be read.
     """
 
-    _SUMMARY = ("id", "run_id", "robot_id", "name", "status", "started_at", "finished_at")
-
     def __init__(self, raw: Optional[dict] = None, monitored: Optional[bool] = None):
-        super().__init__(raw or {})
+        raw = dict(raw or {})
+        super().__init__({
+            "id": raw.get("id"),
+            "runId": raw.get("runId"),
+            "robotId": raw.get("robotMetaId"),
+            "name": raw.get("name"),
+            "status": raw.get("status"),
+            "startedAt": _to_iso(raw.get("startedAt")),
+            "finishedAt": _to_iso(raw.get("finishedAt")),
+        })
+        self._raw = raw
         self._monitored = monitored
+
+    # Older code read the raw record (run["serializableOutput"], run.get("hasChanges")).
+    def __missing__(self, key: str) -> Any:
+        raw = self.__dict__.get("_raw", {})
+        if key in raw:
+            return raw[key]
+        raise KeyError(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if dict.__contains__(self, key):
+            return dict.__getitem__(self, key)
+        return self.__dict__.get("_raw", {}).get(key, default)
 
     @property
     def id(self) -> Optional[str]:
-        return self.get("id")
+        return self["id"]
 
     @property
     def run_id(self) -> Optional[str]:
-        return self.get("runId")
+        return self["runId"]
 
     @property
     def robot_id(self) -> Optional[str]:
-        return self.get("robotMetaId")
+        return self["robotId"]
 
     @property
     def name(self) -> Optional[str]:
-        return self.get("name")
+        return self["name"]
 
     @property
     def status(self) -> Optional[str]:
         """``queued``, ``running``, ``success``, ``failed``, ``aborting`` or ``aborted``."""
-        return self.get("status")
+        return self["status"]
 
     @property
     def started_at(self) -> Optional[str]:
-        return _to_iso(self.get("startedAt"))
+        return self["startedAt"]
 
     @property
     def finished_at(self) -> Optional[str]:
-        return _to_iso(self.get("finishedAt"))
+        return self["finishedAt"]
 
     @property
     def has_changes(self) -> bool:
-        return bool(self.get("hasChanges"))
+        return bool(self._raw.get("hasChanges"))
 
     @property
     def result(self) -> "RunResult":
         """The run's output, in the same shape ``robot.run()`` returns."""
-        return result_from_run(self, getattr(self, "_monitored", None))
+        return result_from_run(self._raw, self._monitored)
 
     def to_dict(self) -> Dict[str, Any]:
-        """The summary fields."""
-        return {key: getattr(self, key) for key in self._SUMMARY}
+        """The summary fields, as a plain dict."""
+        return dict(self)
 
     def get_data(self) -> dict:
         """The raw run record returned by the server."""
-        return dict(self)
-
-    def __repr__(self) -> str:
-        fields = ", ".join(f"{key}={value!r}" for key, value in self.to_dict().items())
-        return f"Run({fields})"
-
-    __str__ = __repr__
+        return self._raw
 
 
 MONITORABLE_TYPES = ("scrape", "crawl", "extract")
@@ -336,12 +356,19 @@ class RunResult(dict):
         return self._raw.get("changedPages") or {"added": [], "removed": [], "changed": []}
 
 
-class Robot:
-    """A robot saved on your Maxun account. Every create/get method returns one."""
+class Robot(dict):
+    """A robot saved on your Maxun account. Every create/get method returns one.
+
+    It is a plain dict of the robot's id, name and type, so printing it or
+    ``json.dumps`` gives exactly ``{"id": "...", "name": "...", "type": "extract"}``.
+    Everything else is available as attributes and methods (``robot.url``,
+    ``robot.run()``, ``robot.get_data()`` for the raw record, ...).
+    """
 
     def __init__(self, client: Client, robot_data: dict):
+        super().__init__()
         self._client = client
-        self._data = robot_data
+        self.robot_data = robot_data
 
     @property
     def client(self) -> Client:
@@ -353,14 +380,21 @@ class Robot:
 
     @robot_data.setter
     def robot_data(self, value: dict) -> None:
-        self._data = value
+        self._data = value or {}
+        meta = self._data.get("recording_meta") or {}
+        dict.clear(self)
+        dict.update(self, {
+            "id": meta.get("id"),
+            "name": meta.get("name", ""),
+            "type": meta.get("type") or meta.get("robotType"),
+        })
 
     def to_dict(self) -> Dict[str, Any]:
-        """The robot's id, name and type."""
-        return {"id": self.id, "name": self.name, "type": self.type}
+        """The robot's id, name and type, as a plain dict."""
+        return dict(self)
 
-    def __repr__(self) -> str:
-        return f"Robot(id={self.id!r}, name={self.name!r}, type={self.type!r})"
+    def __hash__(self) -> int:  # type: ignore[override]
+        return hash(("Robot", self.id))
 
     # ---------- properties ----------
 

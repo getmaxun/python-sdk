@@ -476,11 +476,15 @@ def test_robot_and_config_hide_internals():
     client = Client(config)
     assert "secret-key" not in repr(client)
     robot = RobotClass(client, robot_record("f48", type_="extract", name="Quotes"))
-    assert repr(robot) == "Robot(id='f48', name='Quotes', type='extract')"
-    assert repr([robot]) == "[Robot(id='f48', name='Quotes', type='extract')]"
-    assert robot.to_dict() == {"id": "f48", "name": "Quotes", "type": "extract"}
+    expected = {"id": "f48", "name": "Quotes", "type": "extract"}
+    assert robot == expected and robot.to_dict() == expected
+    assert repr(robot) == repr(expected)
+    assert repr([robot]) == "[{'id': 'f48', 'name': 'Quotes', 'type': 'extract'}]"
+    assert json.loads(json.dumps([robot])) == [expected]
+    assert "secret-key" not in repr(robot) and "recording" not in repr(robot)
     assert robot.client is client and robot.robot_data["recording_meta"]["id"] == "f48"
-
+    assert robot.id == "f48" and robot.name == "Quotes" and robot.type == "extract"
+    assert len({robot, robot}) == 1
 
 from maxun.robot import Run as Run_
 
@@ -508,14 +512,11 @@ async def test_runs_are_summaries_with_results(mock, maxun):
 
     runs = await robot.get_runs()
     run = runs[0]
-    assert run.to_dict() == {
-        "id": "3faa", "run_id": "bdae", "robot_id": "2c56", "name": "Example", "status": "success",
-        "started_at": "2026-10-01T00:46:25Z", "finished_at": "2026-10-01T00:47:14Z",
+    summary = {
+        "id": "3faa", "runId": "bdae", "robotId": "2c56", "name": "Example", "status": "success",
+        "startedAt": "2026-10-01T00:46:25Z", "finishedAt": "2026-10-01T00:47:14Z",
     }
-    assert repr(run) == (
-        "Run(id='3faa', run_id='bdae', robot_id='2c56', name='Example', status='success', "
-        "started_at='2026-10-01T00:46:25Z', finished_at='2026-10-01T00:47:14Z')"
-    )
+    assert run == summary and run.to_dict() == summary and repr(run) == repr(summary)
     assert "log" not in repr(runs) and "serializableOutput" not in repr(runs)
     assert runs[1].started_at is None
     assert run["runId"] == "bdae" and run.get("missing", 1) == 1  # dict-style access still works
@@ -621,16 +622,18 @@ async def test_monitoring_only_for_supported_types(mock, maxun):
 
 def test_runs_still_behave_like_dicts():
     from maxun.robot import Run as RunClass
-    raw = {"id": "1", "runId": "r", "status": "success", "startedAt": "2026-10-01T00:00:00Z"}
+    raw = {"id": "1", "runId": "r", "robotMetaId": "rb", "name": "Example", "status": "success",
+           "startedAt": "2026-10-01T00:00:00Z", "finishedAt": "", "serializableOutput": {"x": 1}}
     run = RunClass(raw)
-    assert "runId" in run and dict(run) == raw and run == raw and sorted(run.keys()) == sorted(raw)
-    assert json.loads(json.dumps(run)) == raw
-    assert run.get_data() == raw and run.run_id == "r"
-    assert repr(run).startswith("Run(id='1', run_id='r'")
-    assert str([run]).startswith("[Run(")
-
-
-
+    summary = {"id": "1", "runId": "r", "robotId": "rb", "name": "Example", "status": "success",
+               "startedAt": "2026-10-01T00:00:00Z", "finishedAt": None}
+    assert run == summary and json.loads(json.dumps(run)) == summary
+    assert repr(run) == repr(summary) and repr([run]) == repr([summary])
+    # The raw record is still reachable.
+    assert run["runId"] == "r" and "status" in run
+    assert run["serializableOutput"] == {"x": 1} and run.get("serializableOutput") == {"x": 1}
+    assert run.get("missing", 1) == 1 and run.get_data() == raw
+    assert run.run_id == "r" and run.robot_id == "rb" and run.started_at == "2026-10-01T00:00:00Z"
 
 # ---------- name-first calls ----------
 
@@ -759,3 +762,17 @@ async def test_monitoring_fields_only_when_monitoring_is_on(mock, maxun):
     mock.get("robots/on/runs").respond(json={"data": [stored]})
     assert "hasChanges" not in (await (await maxun.robots.get("off")).get_runs())[0].result
     assert "hasChanges" in (await (await maxun.robots.get("on")).get_runs())[0].result
+
+
+def test_sync_robots_are_plain_dicts_too(mock):
+    stored = {"name": "Home"}
+    mock.post("robots").respond(201, json={"data": robot_record(name="Home")})
+    mock.put("robots/r1").mock(side_effect=lambda r: httpx.Response(
+        200, json={"data": robot_record(name=json.loads(r.content)["meta"]["name"])}))
+    mock.get("robots").respond(json={"data": [robot_record(name="Home")]})
+    with MaxunSync(api_key="k", base_url=BASE) as m:
+        robot = m.scrape("Home", "https://e.com")
+        assert robot == {"id": "r1", "name": "Home", "type": "scrape"}
+        assert json.loads(json.dumps(m.robots.list())) == [{"id": "r1", "name": "Home", "type": "scrape"}]
+        robot.rename("New")
+        assert robot["name"] == "New" and robot.name == "New"

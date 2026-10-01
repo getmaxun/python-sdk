@@ -266,12 +266,22 @@ The attributes are always safe to read: an output the run didn't produce is `Non
 
 ## Managing robots
 
-Robots print as just their id, name and type:
+A robot is a plain dict of its id, name and type, so printing it or `json.dumps` shows just that:
 
 ```python
->>> await maxun.robots.list()
-[Robot(id='f4880b47-…', name='Extract Test Quotes Robot', type='extract'),
- Robot(id='b827723a-…', name='Test Crawl Quotes Robot', type='crawl')]
+>>> print(json.dumps(await maxun.robots.list(), indent=4))
+[
+    {
+        "id": "a2e3af0f-fd5b-45cc-b2d0-83e7e5aaf5b3",
+        "name": "Test Crawl Quotes",
+        "type": "crawl"
+    },
+    {
+        "id": "76f3e…",
+        "name": "Extract Test Quotes",
+        "type": "extract"
+    }
+]
 ```
 
 ```python
@@ -283,11 +293,10 @@ robot = await maxun.robots.find("Pricing page")   # by exact name
 await maxun.robots.delete("robot-id")
 ```
 
-A `Robot` has `id`, `name`, `type`, `url`, `formats` and `is_monitoring`, plus:
+Everything else is on attributes and methods: `robot.id`, `name`, `type`, `url`, `formats`, `is_monitoring`, plus:
 
 ```python
 await robot.run()
-robot.to_dict()                        # {"id": ..., "name": ..., "type": ...}
 
 await robot.rename("New name")
 await robot.set_list_limit(25)         # item limit of the list/crawl/search step
@@ -300,18 +309,31 @@ robot.get_data()                       # the raw robot record
 
 ### Runs
 
-```python
->>> await robot.get_runs()             # newest first
-[Run(id='3faaa1cd-…', run_id='bdae3b5a-…', robot_id='2c56ce3b-…', name='Example',
-     status='success', started_at='2026-10-01T00:46:25Z', finished_at='2026-10-01T00:47:14Z')]
+A run is a plain dict of its summary:
 
+```python
+>>> print(json.dumps(await robot.get_runs(), indent=4))   # newest first
+[
+    {
+        "id": "3faaa1cd-…",
+        "runId": "bdae3b5a-…",
+        "robotId": "2c56ce3b-…",
+        "name": "Example",
+        "status": "success",
+        "startedAt": "2026-10-01T00:46:25Z",
+        "finishedAt": "2026-10-01T00:47:14Z"
+    }
+]
+```
+
+```python
 run = await robot.get_latest_run()
 run = await robot.get_run(run_id)
 await robot.abort(run_id)              # a queued or running run
 
+run["status"], run.status              # both work; attributes are snake_case (run.run_id, run.started_at)
 run.result                             # the run's output, same as robot.run() returns
-run.to_dict()                          # the summary fields above
-run.get_data()                         # the raw run record (a run is also still a dict of it)
+run.get_data()                         # the raw run record
 ```
 
 `run.result` works for every run, including scheduled ones, so you can read their data later. Times are ISO 8601 in UTC; status is `queued`, `running`, `success`, `failed`, `aborting` or `aborted`.
@@ -486,8 +508,8 @@ Existing code keeps working. `Extract(Config(...))`, `Scrape(...)`, `Crawl(...)`
   - `robot.get_webhooks()` returns `[]` instead of `None` when there are none.
   - `robot.schedule()` returns the saved schedule and `robot.add_webhook()` returns the saved webhook; both used to return `None`.
 - **Document formats:** `create_document_parse_robot` raises `ValueError` for unknown formats instead of silently dropping them.
-- **Runs:** `robot.get_runs()`, `get_run()` and `get_latest_run()` return `Run` objects. A `Run` is still the raw dict underneath, so `run["runId"]`, `"status" in run` and `json.dumps(run)` work as before, but it prints as a short summary and adds `run.result`, `run.status`, `run.started_at` and the other summary attributes.
-- **`print(robot)`** shows `Robot(id=..., name=..., type=...)`, and `Config` no longer prints the API key.
+- **Runs:** `robot.get_runs()`, `get_run()` and `get_latest_run()` return `Run` dicts holding only the summary (`id`, `runId`, `robotId`, `name`, `status`, `startedAt`, `finishedAt`, with ISO UTC times). `run["runId"]` and other raw fields like `run["serializableOutput"]` can still be read; `run.get_data()` returns the whole raw record and `run.result` the output.
+- **Robots** are dicts of `id`, `name` and `type`, so `print()` and `json.dumps` show only those. `Config` no longer prints the API key.
 - **`robot.run()` results:** a `RunResult` now holds the run id, the status and only the outputs the run produced (`markdown`, `listData`, ...), plus `hasChanges`/`changedFormats` when monitoring is on. `result["data"][...]`, `result.get("screenshots")` and the attributes still work.
 - **`from maxun import *`** exports only the public API, not `typing` helpers such as `Optional` or `List`.
 

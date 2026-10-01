@@ -115,11 +115,7 @@ class _SyncProxy:
         object.__setattr__(self, "_runner", runner)
 
     def _wrap(self, value: Any) -> Any:
-        if isinstance(value, _WRAP_TYPES):
-            return _SyncProxy(value, self._runner)
-        if isinstance(value, list) and value and all(isinstance(v, Robot) for v in value):
-            return [_SyncProxy(v, self._runner) for v in value]
-        return value
+        return _wrap(value, self._runner)
 
     def __getattr__(self, name: str) -> Any:
         attr = getattr(self._target, name)
@@ -146,6 +142,45 @@ class _SyncProxy:
 
     def __repr__(self) -> str:
         return repr(self._target)
+
+
+class _SyncRobot(dict):
+    """A robot for MaxunSync: the same plain dict of id, name and type as
+    :class:`Robot`, with methods that block instead of returning coroutines."""
+
+    def __init__(self, target: Robot, runner: _LoopThread):
+        super().__init__(target)
+        self.__dict__["_proxy"] = _SyncProxy(target, runner)
+        self.__dict__["_target"] = target
+
+    def _refresh(self) -> None:
+        dict.clear(self)
+        dict.update(self, self._target)
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._proxy, name)
+        if callable(attr):
+            @functools.wraps(attr)
+            def call(*args: Any, **kwargs: Any) -> Any:
+                try:
+                    return attr(*args, **kwargs)
+                finally:
+                    self._refresh()
+            return call
+        return attr
+
+    def __hash__(self) -> int:  # type: ignore[override]
+        return hash(self._target)
+
+
+def _wrap(value: Any, runner: _LoopThread) -> Any:
+    if isinstance(value, Robot):
+        return _SyncRobot(value, runner)
+    if isinstance(value, _WRAP_TYPES):
+        return _SyncProxy(value, runner)
+    if isinstance(value, list) and value and all(isinstance(v, Robot) for v in value):
+        return [_SyncRobot(v, runner) for v in value]
+    return value
 
 
 class MaxunSync:
