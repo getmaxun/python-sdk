@@ -1,6 +1,6 @@
 import hashlib
 import os
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 from ._naming import auto_name
 from ._resource import Resource
@@ -8,7 +8,7 @@ from ._utils import load_document
 from .client import DOCUMENT_PARSE_FORMATS
 from .llm_options import build_llm_payload
 from .robot import Robot
-from .types import ConflictError, DocumentFormat, LLMProvider
+from .types import DocumentFormat, LLMProvider
 
 FileInput = Union[str, os.PathLike, bytes]
 
@@ -43,11 +43,12 @@ class Documents(Resource):
         llm = build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url)
         settings = {"type": "doc-extract", "file": hashlib.sha1(data).hexdigest(), "prompt": prompt.strip(), **llm}
 
-        async def create(robot_name: str) -> dict:
-            return await self.client.create_document_extract_robot(
+        async def create(robot_name: str) -> Robot:
+            body = await self.client.create_document_extract_robot(
                 data, prompt, robot_name=robot_name, llm_provider=llm_provider, llm_model=llm_model,
                 llm_api_key=llm_api_key, llm_base_url=llm_base_url, file_name=file_name,
             )
+            return Robot(self.client, body["data"])
 
         return await self._create_reusing(name, auto_name("Document", file_name, settings), create)
 
@@ -76,33 +77,14 @@ class Documents(Resource):
             **llm,
         }
 
-        async def create(robot_name: str) -> dict:
-            return await self.client.create_document_parse_robot(
+        async def create(robot_name: str) -> Robot:
+            body = await self.client.create_document_parse_robot(
                 data, formats, robot_name=robot_name, file_name=file_name, llm_provider=llm_provider,
                 llm_model=llm_model, llm_api_key=llm_api_key, llm_base_url=llm_base_url,
             )
+            return Robot(self.client, body["data"])
 
         return await self._create_reusing(name, auto_name("Parse", file_name, settings), create)
-
-    async def _create_reusing(
-        self,
-        name: Optional[str],
-        default_name: str,
-        create: Callable[[str], Awaitable[Dict[str, Any]]],
-    ) -> Robot:
-        """Create the robot. When the name was generated, a name clash means the
-        same file and settings were sent before, so the existing robot is returned
-        (the server refuses to reuse document robot names)."""
-        try:
-            body = await create(name or default_name)
-        except ConflictError:
-            if name:
-                raise
-            existing = [r for r in await self.list() if r.name == default_name]
-            if not existing:
-                raise
-            return existing[0]
-        return Robot(self.client, body["data"])
 
 
 __all__ = ["Documents", "DOCUMENT_PARSE_FORMATS"]

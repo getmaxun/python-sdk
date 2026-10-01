@@ -1,4 +1,4 @@
-from typing import Awaitable, Optional, Union
+from typing import Any, Awaitable, Optional, Union
 
 from ._naming import auto_name, check_url, describe_url, shorten
 from ._resource import Resource
@@ -16,8 +16,7 @@ class Extract(Resource):
 
     def __call__(
         self,
-        url: Optional[str] = None,
-        *,
+        *args: Any,
         prompt: Optional[str] = None,
         name: Optional[str] = None,
         monitor: Optional[bool] = None,
@@ -25,6 +24,7 @@ class Extract(Resource):
         llm_model: Optional[str] = None,
         llm_api_key: Optional[str] = None,
         llm_base_url: Optional[str] = None,
+        **unexpected: Any,
     ) -> Union[ExtractBuilder, Awaitable[Robot]]:
         """Create an extraction robot.
 
@@ -42,6 +42,16 @@ class Extract(Resource):
         :param monitor: Compare every run with the previous one.
         :param llm_*: With a prompt, self-hosted Maxun only.
         """
+        # Signature: maxun.extract(url=None, *, prompt=None, name=None, monitor=None, llm_*=None)
+        keyword_url = unexpected.pop("url", None)
+        if unexpected:
+            raise TypeError(f"maxun.extract() got unexpected arguments: {', '.join(unexpected)}")
+        if len(args) > 1 or (args and keyword_url is not None):
+            raise TypeError(
+                "maxun.extract(url, prompt=...) takes the URL first and the settings as keyword "
+                "arguments. Pass the robot name as name=..."
+            )
+        url: Optional[str] = args[0] if args else keyword_url
         llm = {
             "llm_provider": llm_provider, "llm_model": llm_model,
             "llm_api_key": llm_api_key, "llm_base_url": llm_base_url,
@@ -59,8 +69,10 @@ class Extract(Resource):
                 **build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url),
             }
             subject = describe_url(url) if url else shorten(prompt)
-            return self.from_prompt(
-                prompt, url=url, name=name or auto_name("Extract", subject, settings), monitor=monitor, **llm
+            return self._create_reusing(
+                name,
+                auto_name("Extract", subject, settings),
+                lambda robot_name: self.from_prompt(prompt, url=url, name=robot_name, monitor=monitor, **llm),
             )
 
         if any(value is not None for value in llm.values()):

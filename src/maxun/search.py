@@ -66,7 +66,7 @@ class Search(Resource):
     async def __call__(
         self,
         query: str,
-        *,
+        *args: Any,
         name: Optional[str] = None,
         mode: SearchMode = "scrape",
         limit: int = 10,
@@ -89,13 +89,18 @@ class Search(Resource):
         :param name: Robot name. Defaults to one made from the query and settings.
         :param llm_*: Self-hosted Maxun only, needed for the ``summary`` format.
         """
+        if args:
+            raise TypeError(
+                "maxun.search(query, ...) takes the query first and the settings as keyword arguments. "
+                "Pass the robot name as name=..."
+            )
         if not isinstance(query, str) or not query.strip():
             raise ValueError('maxun.search(query, ...) needs a search query, e.g. maxun.search("AI news").')
         config = SearchConfig(query=query.strip(), mode=mode, limit=limit, time_range=time_range)
         settings = {
             "type": "search",
             "searchConfig": to_payload(config),
-            "formats": check_formats(formats),
+            "formats": check_formats(formats) or (["markdown"] if mode == "scrape" else None),
             **build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url),
         }
         return await self.create(

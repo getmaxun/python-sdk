@@ -108,78 +108,68 @@ def result_from_run(raw: dict) -> "RunResult":
     })
 
 
-class Run:
+class Run(dict):
     """One run of a robot.
 
-    Printing it shows only the summary fields; the run's output is in
-    ``run.result`` (a :class:`RunResult`, like the one ``robot.run()`` returns)
-    and the raw server record in ``run.get_data()``. ``run["runId"]``-style
-    access to the raw record still works.
+    Printing it shows only the summary fields. The run's output is in
+    ``run.result`` (a :class:`RunResult`, like the one ``robot.run()`` returns).
+    It is still the raw server record underneath, so ``run["runId"]``,
+    ``"status" in run``, ``dict(run)`` and ``json.dumps(run)`` keep working.
     """
 
     _SUMMARY = ("id", "run_id", "robot_id", "name", "status", "started_at", "finished_at")
 
-    def __init__(self, raw: dict):
-        self._raw = raw or {}
-
     @property
     def id(self) -> Optional[str]:
-        return self._raw.get("id")
+        return self.get("id")
 
     @property
     def run_id(self) -> Optional[str]:
-        return self._raw.get("runId")
+        return self.get("runId")
 
     @property
     def robot_id(self) -> Optional[str]:
-        return self._raw.get("robotMetaId")
+        return self.get("robotMetaId")
 
     @property
     def name(self) -> Optional[str]:
-        return self._raw.get("name")
+        return self.get("name")
 
     @property
     def status(self) -> Optional[str]:
         """``queued``, ``running``, ``success``, ``failed``, ``aborting`` or ``aborted``."""
-        return self._raw.get("status")
+        return self.get("status")
 
     @property
     def started_at(self) -> Optional[str]:
-        return _to_iso(self._raw.get("startedAt"))
+        return _to_iso(self.get("startedAt"))
 
     @property
     def finished_at(self) -> Optional[str]:
-        return _to_iso(self._raw.get("finishedAt"))
+        return _to_iso(self.get("finishedAt"))
 
     @property
     def has_changes(self) -> bool:
-        return bool(self._raw.get("hasChanges"))
+        return bool(self.get("hasChanges"))
 
     @property
     def result(self) -> "RunResult":
         """The run's output, in the same shape ``robot.run()`` returns."""
-        return result_from_run(self._raw)
+        return result_from_run(self)
 
     def to_dict(self) -> Dict[str, Any]:
+        """The summary fields."""
         return {key: getattr(self, key) for key in self._SUMMARY}
 
     def get_data(self) -> dict:
         """The raw run record returned by the server."""
-        return self._raw
-
-    # Older code treated runs as dicts.
-    def __getitem__(self, key: str) -> Any:
-        return self._raw[key]
-
-    def get(self, key: str, default: Any = None) -> Any:
-        return self._raw.get(key, default)
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, Run) and other._raw == self._raw
+        return dict(self)
 
     def __repr__(self) -> str:
         fields = ", ".join(f"{key}={value!r}" for key, value in self.to_dict().items())
         return f"Run({fields})"
+
+    __str__ = __repr__
 
 
 MONITORABLE_TYPES = ("scrape", "crawl", "extract")

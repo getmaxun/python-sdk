@@ -723,3 +723,66 @@ async def test_monitoring_only_for_supported_types(mock, maxun):
         await robot.set_monitoring(True)
     with pytest.raises(TypeError):
         await maxun.search.create("Q", "query", monitor=True)
+
+
+# ---------- review follow-ups ----------
+
+async def test_old_argument_order_gets_a_clear_message(maxun):
+    for call in (
+        lambda: maxun.scrape("Home", "https://e.com"),
+        lambda: maxun.crawl("Docs", "https://e.com"),
+        lambda: maxun.search("My search", "AI"),
+    ):
+        with pytest.raises(TypeError, match="name=..."):
+            await call()
+    with pytest.raises(TypeError, match="name=..."):
+        maxun.extract("Products", prompt="prices", url="https://e.com")
+    with pytest.raises(TypeError, match="unexpected arguments: robot_name"):
+        maxun.extract("https://e.com", robot_name="x")
+
+
+async def test_keyword_url_still_works(mock, maxun):
+    llm = mock.post("extract/llm").respond(json={"data": {"robotId": "r1"}})
+    mock.get("robots/r1").respond(json={"data": robot_record(type_="extract")})
+    await maxun.extract(url="https://e.com", prompt="prices")
+    assert body(llm)["url"] == "https://e.com"
+
+
+def test_runs_still_behave_like_dicts():
+    from maxun.robot import Run as RunClass
+    raw = {"id": "1", "runId": "r", "status": "success", "startedAt": "2026-10-01T00:00:00Z"}
+    run = RunClass(raw)
+    assert "runId" in run and dict(run) == raw and run == raw and sorted(run.keys()) == sorted(raw)
+    assert json.loads(json.dumps(run)) == raw
+    assert run.get_data() == raw and run.run_id == "r"
+    assert repr(run).startswith("Run(id='1', run_id='r'")
+    assert str([run]).startswith("[Run(")
+
+
+async def test_generated_names_reuse_the_robot_on_conflict(mock, maxun):
+    created = {}
+
+    def create(request):
+        created["name"] = json.loads(request.content)["meta"]["name"]
+        return httpx.Response(409, json={"error": "exists with a different configuration"})
+
+    mock.post("robots").mock(side_effect=create)
+    mock.get("robots").mock(side_effect=lambda r: httpx.Response(
+        200, json={"data": [robot_record("old", name=created.get("name"))]}))
+    robot = await maxun.scrape("https://e.com")
+    assert robot.id == "old"
+    with pytest.raises(ConflictError):
+        await maxun.scrape("https://e.com", name="Mine")
+
+    llm = mock.post("extract/llm").respond(409, json={"error": "exists"})
+    mock.get("robots").mock(side_effect=lambda r: httpx.Response(
+        200, json={"data": [robot_record("p", type_="extract", name=json.loads(llm.calls[-1].request.content)["robotName"])]}))
+    assert (await maxun.extract(prompt="YC companies")).id == "p"
+
+
+async def test_default_formats_do_not_change_generated_names(mock, maxun):
+    route = mock.post("crawl").respond(201, json={"data": robot_record(type_="crawl")})
+    await maxun.crawl("https://e.com")
+    first = body(route)["name"]
+    await maxun.crawl("https://e.com", formats=["markdown"])
+    assert body(route)["name"] == first

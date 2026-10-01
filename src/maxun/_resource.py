@@ -1,8 +1,8 @@
-from typing import Any, List, Optional
+from typing import Any, Awaitable, Callable, List, Optional
 
 from .client import Client
 from .robot import Robot
-from .types import Config
+from .types import Config, ConflictError
 
 
 async def list_robots(client: Client, types: Optional[tuple] = None) -> List[Robot]:
@@ -43,6 +43,25 @@ class Resource:
         if monitor is not None and bool(monitor) != robot.is_monitoring:
             await robot.set_monitoring(bool(monitor))
         return robot
+
+    async def _create_reusing(
+        self,
+        name: Optional[str],
+        default_name: str,
+        create: Callable[[str], Awaitable[Robot]],
+    ) -> Robot:
+        """Create a robot. When the SDK generated the name, a name clash means a
+        robot was already made from the same settings, so that robot is returned
+        instead of raising ConflictError."""
+        try:
+            return await create(name or default_name)
+        except ConflictError:
+            if name:
+                raise
+            existing = [robot for robot in await self.list() if robot.name == default_name]
+            if not existing:
+                raise
+            return existing[0]
 
     async def list(self, type: Optional[str] = None) -> List[Robot]:  # noqa: A002
         """Robots of this kind on your account.

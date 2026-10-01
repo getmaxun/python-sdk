@@ -68,7 +68,7 @@ Each call takes what to work on first (a URL, a query or a file), then the setti
 
 **Robot names.** Every call accepts `name="..."`. Leave it out and the SDK names the robot after what it does plus a short fingerprint of its settings, e.g. `Scrape: maxun.dev [3f2a1c]`. So:
 
-- Running the same call again reuses the same robot instead of creating a duplicate.
+- Running the same call again reuses the same robot instead of creating a duplicate. This holds even if you've edited that robot since, or a prompt robot found a different page the second time.
 - Changing any setting gives a new name, so it never clashes with the old robot.
 - The Node SDK generates the same names, so both SDKs share robots.
 
@@ -310,7 +310,7 @@ await robot.abort(run_id)              # a queued or running run
 
 run.result                             # the run's output, same as robot.run() returns
 run.to_dict()                          # the summary fields above
-run.get_data()                         # the raw run record
+run.get_data()                         # the raw run record (a run is also still a dict of it)
 ```
 
 `run.result` works for every run, including scheduled ones, so you can read their data later. Times are ISO 8601 in UTC; status is `queued`, `running`, `success`, `failed`, `aborting` or `aborted`.
@@ -484,7 +484,7 @@ Existing code keeps working. `Extract(Config(...))`, `Scrape(...)`, `Crawl(...)`
   - `robot.get_webhooks()` returns `[]` instead of `None` when there are none.
   - `robot.schedule()` returns the saved schedule and `robot.add_webhook()` returns the saved webhook; both used to return `None`.
 - **Document formats:** `create_document_parse_robot` raises `ValueError` for unknown formats instead of silently dropping them.
-- **Runs:** `robot.get_runs()`, `get_run()` and `get_latest_run()` return `Run` objects instead of raw dicts. They print as a short summary; `run["runId"]` and `run.get(...)` still read the raw record, and `run.get_data()` returns all of it.
+- **Runs:** `robot.get_runs()`, `get_run()` and `get_latest_run()` return `Run` objects. A `Run` is still the raw dict underneath, so `run["runId"]`, `"status" in run` and `json.dumps(run)` work as before, but it prints as a short summary and adds `run.result`, `run.status`, `run.started_at` and the other summary attributes.
 - **`print(robot)`** shows `Robot(id=..., name=..., type=...)`, and `Config` no longer prints the API key.
 - **`from maxun import *`** exports only the public API, not `typing` helpers such as `Optional` or `List`.
 

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from ._naming import auto_name, check_url, describe_url
 from ._resource import Resource
@@ -71,7 +71,7 @@ class Scrape(Resource):
     async def __call__(
         self,
         url: str,
-        *,
+        *args: Any,
         name: Optional[str] = None,
         formats: Optional[List[Format]] = None,
         smart_queries: Optional[str] = None,
@@ -93,6 +93,11 @@ class Scrape(Resource):
             so the same call returns the same robot.
         :param llm_*: Self-hosted Maxun only, needed for ``summary`` and Smart Queries.
         """
+        if args:
+            raise TypeError(
+                "maxun.scrape(url, ...) takes the URL first and the settings as keyword arguments. "
+                "Pass the robot name as name=..."
+            )
         url = check_url(url, "maxun.scrape(url, ...)")
         settings = {
             "type": "scrape",
@@ -102,14 +107,11 @@ class Scrape(Resource):
             "monitor": monitor,
             **build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url),
         }
-        return await self.create(
-            name or auto_name("Scrape", describe_url(url), settings),
-            url,
-            formats=formats,
-            smart_queries=smart_queries,
-            llm_provider=llm_provider,
-            llm_model=llm_model,
-            llm_api_key=llm_api_key,
-            llm_base_url=llm_base_url,
-            monitor=monitor,
+        return await self._create_reusing(
+            name,
+            auto_name("Scrape", describe_url(url), settings),
+            lambda robot_name: self.create(
+                robot_name, url, formats=formats, smart_queries=smart_queries, llm_provider=llm_provider,
+                llm_model=llm_model, llm_api_key=llm_api_key, llm_base_url=llm_base_url, monitor=monitor,
+            ),
         )
