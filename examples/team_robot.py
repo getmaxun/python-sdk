@@ -13,7 +13,7 @@ load_dotenv()
 
 async def main():
     async with Maxun(team_id=os.environ.get("MAXUN_TEAM_ID")) as maxun:
-        robot = await maxun.scrape("Team Scraper", "https://example.com")
+        robot = await maxun.scrape("https://example.com", name="Team Scraper")
         print([r.name for r in await maxun.robots.list()])
         result = await robot.run()
         print(result.status)

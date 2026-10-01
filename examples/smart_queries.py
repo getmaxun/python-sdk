@@ -14,7 +14,6 @@ load_dotenv()
 async def main():
     async with Maxun() as maxun:
         robot = await maxun.scrape(
-            "HN Front Page Q&A",
             "https://news.ycombinator.com",
             smart_queries="Which story on this page has the most points?",
         )

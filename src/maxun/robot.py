@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
 from ._monitoring import compare_crawl, crawl_diff, crawl_pages, previous_successful_run
@@ -20,6 +20,159 @@ def _parse_time(value: Any) -> Optional[datetime]:
         except ValueError:
             continue
     return None
+
+
+def _to_iso(value: Any) -> Optional[str]:
+    """Normalise a run timestamp to ISO 8601 UTC ("2026-10-01T00:46:25Z").
+
+    The server writes ``new Date().toLocaleString()`` ("9/30/2026, 10:00:00 AM"),
+    which has no timezone; it is read as UTC, the default for Maxun deployments.
+    Anything unrecognised is returned unchanged.
+    """
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            parsed = datetime.strptime(value, "%m/%d/%Y, %I:%M:%S %p")
+        except ValueError:
+            return value
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _first_content(value: Any) -> Optional[str]:
+    if isinstance(value, list) and value and isinstance(value[0], dict):
+        return value[0].get("content") or None
+    return None
+
+
+def result_from_run(raw: dict) -> "RunResult":
+    """Build a RunResult from a stored run, the same way the server builds the
+    result of ``robot.run()``."""
+    output = raw.get("serializableOutput") or {}
+    scrape = output.get("scrape") or {}
+
+    list_data: List[Any] = []
+    scrape_list = output.get("scrapeList")
+    if isinstance(scrape_list, dict) and isinstance(scrape_list.get("scrapeList"), list):
+        list_data = scrape_list["scrapeList"]
+    elif isinstance(scrape_list, list):
+        list_data = scrape_list
+    elif isinstance(scrape_list, dict):
+        first = next(iter(scrape_list.values()), None)
+        list_data = first if isinstance(first, list) else []
+
+    crawl = output.get("crawl")
+    if isinstance(crawl, list):
+        crawl_data = crawl
+    elif isinstance(crawl, dict):
+        first = next(iter(crawl.values()), None)
+        crawl_data = first if isinstance(first, list) else []
+    else:
+        crawl_data = []
+
+    def content(fmt: str) -> Optional[str]:
+        return _first_content(output.get(fmt)) or _first_content(scrape.get(fmt))
+
+    links = output.get("links") or scrape.get("links") or []
+    data = {
+        "textData": output.get("scrapeSchema") or {},
+        "listData": list_data,
+        "crawlData": crawl_data,
+        "searchData": output.get("search") or {},
+        "text": content("text"),
+        "markdown": content("markdown"),
+        "html": content("html"),
+        "summary": content("summary"),
+        "promptResult": _first_content(output.get("promptResult")),
+        "links": [link["url"] if isinstance(link, dict) and "url" in link else link for link in links],
+        "documentData": (output.get("scrapeDoc") or {}).get("data"),
+    }
+    return RunResult({
+        "runId": raw.get("runId"),
+        "status": raw.get("status"),
+        "hasChanges": bool(raw.get("hasChanges")),
+        "changedFormats": (output.get("_comparison") or {}).get("changedFormats") or [],
+        "data": data,
+        "screenshots": list((raw.get("binaryOutput") or {}).values()),
+    })
+
+
+class Run:
+    """One run of a robot.
+
+    Printing it shows only the summary fields; the run's output is in
+    ``run.result`` (a :class:`RunResult`, like the one ``robot.run()`` returns)
+    and the raw server record in ``run.get_data()``. ``run["runId"]``-style
+    access to the raw record still works.
+    """
+
+    _SUMMARY = ("id", "run_id", "robot_id", "name", "status", "started_at", "finished_at")
+
+    def __init__(self, raw: dict):
+        self._raw = raw or {}
+
+    @property
+    def id(self) -> Optional[str]:
+        return self._raw.get("id")
+
+    @property
+    def run_id(self) -> Optional[str]:
+        return self._raw.get("runId")
+
+    @property
+    def robot_id(self) -> Optional[str]:
+        return self._raw.get("robotMetaId")
+
+    @property
+    def name(self) -> Optional[str]:
+        return self._raw.get("name")
+
+    @property
+    def status(self) -> Optional[str]:
+        """``queued``, ``running``, ``success``, ``failed``, ``aborting`` or ``aborted``."""
+        return self._raw.get("status")
+
+    @property
+    def started_at(self) -> Optional[str]:
+        return _to_iso(self._raw.get("startedAt"))
+
+    @property
+    def finished_at(self) -> Optional[str]:
+        return _to_iso(self._raw.get("finishedAt"))
+
+    @property
+    def has_changes(self) -> bool:
+        return bool(self._raw.get("hasChanges"))
+
+    @property
+    def result(self) -> "RunResult":
+        """The run's output, in the same shape ``robot.run()`` returns."""
+        return result_from_run(self._raw)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {key: getattr(self, key) for key in self._SUMMARY}
+
+    def get_data(self) -> dict:
+        """The raw run record returned by the server."""
+        return self._raw
+
+    # Older code treated runs as dicts.
+    def __getitem__(self, key: str) -> Any:
+        return self._raw[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._raw.get(key, default)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Run) and other._raw == self._raw
+
+    def __repr__(self) -> str:
+        fields = ", ".join(f"{key}={value!r}" for key, value in self.to_dict().items())
+        return f"Run({fields})"
 
 
 MONITORABLE_TYPES = ("scrape", "crawl", "extract")
@@ -122,11 +275,27 @@ class Robot:
     """A robot saved on your Maxun account. Every create/get method returns one."""
 
     def __init__(self, client: Client, robot_data: dict):
-        self.client = client
-        self.robot_data = robot_data
+        self._client = client
+        self._data = robot_data
+
+    @property
+    def client(self) -> Client:
+        return self._client
+
+    @property
+    def robot_data(self) -> dict:
+        return self._data
+
+    @robot_data.setter
+    def robot_data(self, value: dict) -> None:
+        self._data = value
+
+    def to_dict(self) -> Dict[str, Any]:
+        """The robot's id, name and type."""
+        return {"id": self.id, "name": self.name, "type": self.type}
 
     def __repr__(self) -> str:
-        return f"<Robot id={self.id!r} name={self.name!r} type={self.type!r}>"
+        return f"Robot(id={self.id!r}, name={self.name!r}, type={self.type!r})"
 
     # ---------- properties ----------
 
@@ -202,7 +371,7 @@ class Robot:
         if not result.run_id:
             return
         try:
-            runs = await self.get_runs()
+            runs = await self._raw_runs()
         except MaxunError as e:
             warn(f"The run succeeded but could not be compared with the previous run: {e}")
             return
@@ -245,18 +414,21 @@ class Robot:
             data["documentData"] = (output.get("scrapeDoc") or {}).get("data")
         result["data"] = data
 
-    async def get_runs(self) -> List[dict]:
-        """All runs of this robot, newest first."""
+    async def _raw_runs(self) -> List[dict]:
         runs = await self.client.get_runs(self.id)
         keys = [_parse_time(r.get("startedAt")) for r in runs]
         if runs and all(k is not None for k in keys):
             return [r for _, r in sorted(zip(keys, runs), key=lambda pair: pair[0], reverse=True)]
         return runs  # the server already returns newest first
 
-    async def get_run(self, run_id: str) -> dict:
-        return await self.client.get_run(self.id, run_id)
+    async def get_runs(self) -> List[Run]:
+        """All runs of this robot, newest first. Each run's output is in ``run.result``."""
+        return [Run(raw) for raw in await self._raw_runs()]
 
-    async def get_latest_run(self) -> Optional[dict]:
+    async def get_run(self, run_id: str) -> Run:
+        return Run(await self.client.get_run(self.id, run_id))
+
+    async def get_latest_run(self) -> Optional[Run]:
         runs = await self.get_runs()
         return runs[0] if runs else None
 
@@ -285,7 +457,7 @@ class Robot:
         ``pages`` that were added, removed or changed.
         """
         if self.type == "crawl":
-            runs = await self.get_runs()
+            runs = await self._raw_runs()
             current = next((r for r in runs if r.get("runId") == run_id), None)
             if current is None:
                 current = await self.client.get_run(self.id, run_id)

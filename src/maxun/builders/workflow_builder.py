@@ -11,12 +11,13 @@ class WorkflowBuilder:
     reverse: the first page visited is last in ``self.workflow``.
     """
 
-    def __init__(self, name: str, robot_type: RobotType):
+    def __init__(self, name: Optional[str], robot_type: RobotType):
         self.name = name
         self.robot_type = robot_type
         self.workflow: List[Dict[str, Any]] = []
         self.meta: Dict[str, Any] = {"name": name, "type": robot_type}
         self.current_step: Optional[Dict[str, Any]] = None
+        self.start_url: Optional[str] = None
         self._is_first_navigation = True
 
     # ---------- navigation & interaction ----------
@@ -26,6 +27,7 @@ class WorkflowBuilder:
         main_step = {"where": {"url": url}, "what": []}
 
         if self._is_first_navigation:
+            self.start_url = url
             self.workflow.append({
                 "where": {"url": "about:blank"},
                 "what": [

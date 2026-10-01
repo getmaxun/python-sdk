@@ -147,6 +147,9 @@ class Client:
         # Content-Type is left to httpx so multipart uploads get the right header.
         self.client = httpx.AsyncClient(base_url=self.base_url, headers=headers, timeout=config.timeout)
 
+    def __repr__(self) -> str:
+        return f"Client(base_url={self.base_url!r})"
+
     # ---------- lifecycle ----------
 
     async def close(self) -> None:

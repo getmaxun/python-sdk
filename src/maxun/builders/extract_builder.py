@@ -16,7 +16,7 @@ class ExtractBuilder(WorkflowBuilder):
     """Builds a selector-based extraction robot. Finish with ``await builder.build()``
     (or ``await builder``)."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: Optional[str] = None):
         super().__init__(name, "extract")
         self._extractor = None
 

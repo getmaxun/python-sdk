@@ -1,5 +1,6 @@
 from typing import List, Optional
 
+from ._naming import auto_name, check_url, describe_url
 from ._resource import Resource
 from .llm_options import build_llm_payload
 from .robot import Robot
@@ -67,5 +68,48 @@ class Scrape(Resource):
         robot_data = await self.client.create_robot({"meta": meta, "workflow": []})
         return Robot(self.client, robot_data)
 
-    #: ``await maxun.scrape(name, url, ...)`` is the same as ``create``.
-    __call__ = create
+    async def __call__(
+        self,
+        url: str,
+        *,
+        name: Optional[str] = None,
+        formats: Optional[List[Format]] = None,
+        smart_queries: Optional[str] = None,
+        monitor: Optional[bool] = None,
+        llm_provider: Optional[LLMProvider] = None,
+        llm_model: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+        llm_base_url: Optional[str] = None,
+    ) -> Robot:
+        """Create a scrape robot::
+
+            robot = await maxun.scrape("https://maxun.dev", formats=["markdown", "html"])
+
+        :param formats: Any of markdown, html, text, links, summary,
+            screenshot-visible, screenshot-fullpage. Defaults to ["markdown"].
+        :param smart_queries: A question the LLM answers about the page on every run.
+        :param monitor: Compare every run with the previous one.
+        :param name: Robot name. Defaults to one made from the URL and settings,
+            so the same call returns the same robot.
+        :param llm_*: Self-hosted Maxun only, needed for ``summary`` and Smart Queries.
+        """
+        url = check_url(url, "maxun.scrape(url, ...)")
+        settings = {
+            "type": "scrape",
+            "url": url,
+            "formats": check_formats(formats) or ["markdown"],
+            "smartQueries": smart_queries.strip() if smart_queries and smart_queries.strip() else None,
+            "monitor": monitor,
+            **build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url),
+        }
+        return await self.create(
+            name or auto_name("Scrape", describe_url(url), settings),
+            url,
+            formats=formats,
+            smart_queries=smart_queries,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            llm_api_key=llm_api_key,
+            llm_base_url=llm_base_url,
+            monitor=monitor,
+        )

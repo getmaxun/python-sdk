@@ -62,7 +62,7 @@ class Config:
     for the run to finish and has no timeout unless you pass one to ``run()``.
     """
 
-    api_key: Optional[str] = None
+    api_key: Optional[str] = field(default=None, repr=False)
     base_url: Optional[str] = None
     team_id: Optional[str] = None
     timeout: float = 30.0
