@@ -31,7 +31,7 @@ class AnthropicProvider(BaseLLMProvider):
             response = await self.client.messages.create(
                 model=self.config.model or "claude-3-5-sonnet-20241022",
                 max_tokens=self.config.max_tokens or 4096,
-                temperature=self.config.temperature or 0.7,
+                temperature=0.7 if self.config.temperature is None else self.config.temperature,
                 system=system_message.content if system_message else None,
                 messages=[
                     {"role": m.role, "content": m.content}

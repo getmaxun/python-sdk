@@ -1,75 +1,35 @@
+"""Get notified when a run finishes.
+
+Maxun POSTs {"event_type": "run_completed" | "run_failed", "timestamp", "webhook_id", "data"}
+to your URL. Failed deliveries are retried with exponential backoff.
 """
-Webhooks Example
-
-This example demonstrates:
-- Adding webhooks for robot events
-- Configuring webhook events and headers
-- Getting webhook notifications when runs complete
-
-Site: Indie Hackers (https://www.indiehackers.com)
-"""
-
 import asyncio
-import os
-import sys
 
 from dotenv import load_dotenv
-from maxun import Extract, Config
-
-
-async def main():
-    extractor = Extract(Config(
-        api_key=os.environ["MAXUN_API_KEY"],
-        base_url=os.environ.get("MAXUN_BASE_URL", "https://app.maxun.dev/api/sdk/"),
-    ))
-
-    # Create a robot to extract Indie Hackers posts
-    robot = await (
-        extractor
-        .create("Indie Hackers Posts Monitor")
-        .navigate("https://www.indiehackers.com/tags/artificial-intelligence")
-        .capture_list(
-            {
-                "selector": "a.ember-view.portal-entry",
-                "maxItems": 10,
-            }
-        )
-    )
-
-    print(f"Robot created: {robot.id}")
-
-    # Add webhook for notifications
-    await robot.add_webhook({
-        "url": "https://your-webhook-url.com/notifications",
-        "events": ["run.completed", "run.failed"],
-        "headers": {
-            "Authorization": "Bearer your-secret-token",
-            "X-Custom-Header": "maxun-webhook",
-        },
-    })
-
-    print("\n✓ Webhook added")
-    print("  URL: https://your-webhook-url.com/notifications")
-    print("  Events: run.completed, run.failed")
-
-    webhooks = robot.get_webhooks()
-    print(f"\n✓ Total webhooks configured: {len(webhooks or [])}")
-
-    # Run the robot — webhook will be triggered on completion
-    print("\nRunning robot...")
-    result = await robot.run()
-
-    list_data = result.get("data", {}).get("listData") or []
-    print(f"\n✓ Run completed: {result.get('runId')}")
-    print(f"  Status: {result.get('status')}")
-    print(f"  Items extracted: {len(list_data)}")
-    print("\n→ Webhook notification has been sent to your endpoint")
-
+from maxun import Maxun
 
 load_dotenv()
 
-if not os.environ.get("MAXUN_API_KEY"):
-    print("Error: MAXUN_API_KEY environment variable is required", file=sys.stderr)
-    sys.exit(1)
+
+async def main():
+    async with Maxun() as maxun:
+        robot = await maxun.scrape("Example With Webhook", "https://example.com")
+
+        # Both events by default
+        hook = await robot.add_webhook("https://your-server.example/maxun-hook")
+        print("Added", hook["id"], hook["events"])
+
+        # Only failures, with more retries
+        await robot.add_webhook(
+            "https://alerts.example/maxun-failed",
+            events=["run_failed"],
+            retry_attempts=5,
+        )
+
+        print([w["url"] for w in await robot.get_webhooks()])
+
+        await robot.remove_webhook("https://alerts.example/maxun-failed")
+        await robot.remove_webhooks()  # remove all
+
 
 asyncio.run(main())

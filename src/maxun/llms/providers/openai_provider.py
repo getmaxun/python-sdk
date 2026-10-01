@@ -29,7 +29,7 @@ class OpenAIProvider(BaseLLMProvider):
             response = await self.client.chat.completions.create(
                 model=self.config.model or "gpt-4o-mini",
                 messages=[m.__dict__ for m in messages],
-                temperature=self.config.temperature or 0.7,
+                temperature=0.7 if self.config.temperature is None else self.config.temperature,
                 max_tokens=self.config.max_tokens or 4096,
             )
 

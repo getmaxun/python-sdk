@@ -1,83 +1,38 @@
+"""Capture a repeated element as a list, across pages.
+
+Fields inside each item are detected automatically. Leave out "pagination" to
+let Maxun detect it, or set it yourself:
+  {"type": "scrollDown"}                                   infinite scroll
+  {"type": "clickNext", "selector": "a.next"}              "Next" button
+  {"type": "clickLoadMore", "selector": "button.more"}     "Load more" button
+  {"type": "none"}                                         first page only
 """
-List Pagination Example
-
-This example demonstrates:
-- Extracting lists with capture_list
-- Handling pagination automatically
-- Different pagination strategies
-- Setting max_items limit
-
-Site: GitHub Repositories (https://github.com/ab?tab=repositories)
-"""
-
 import asyncio
 import json
-import os
-import sys
 
 from dotenv import load_dotenv
-from maxun import Extract, Config
-
-
-async def main():
-    extractor = Extract(Config(
-        api_key=os.environ["MAXUN_API_KEY"],
-        base_url=os.environ.get("MAXUN_BASE_URL", "https://app.maxun.dev/api/sdk/"),
-    ))
-
-    # Extract repositories from GitHub. Auto-detects clickNext pagination.
-    robot = await (
-        extractor
-        .create("GitHub Repositories (AB)")
-        .navigate("https://github.com/ab?tab=repositories")
-        .capture_list(
-            {
-                "selector": "li.col-12.d-flex.flex-justify-between.width-full"
-                            ".py-4.border-bottom.color-border-muted.public.source",
-                "maxItems": 100,
-            }
-        )
-    )
-
-    print(f"Robot created: {robot.id}")
-
-    result = await robot.run()
-
-    list_data = result.get("data", {}).get("listData") or []
-    print(f"\nExtracted {len(list_data)} repositories")
-    print("\nFirst 3 repositories:")
-    print(json.dumps(list_data[:3], indent=2))
-
-    # -------------------------------------------------------------------------
-    # Other pagination examples (uncomment to use):
-    #
-    # Infinite scroll (Reddit, Twitter, etc.)
-    # .capture_list({
-    #     "selector": ".post",
-    #     "pagination": {"type": "scrollDown"},
-    #     "maxItems": 50,
-    # })
-    #
-    # Click "Next" button (traditional pagination)
-    # .capture_list({
-    #     "selector": ".product-item",
-    #     "pagination": {"type": "clickNext", "selector": ".pagination-next"},
-    #     "maxItems": 100,
-    # })
-    #
-    # Click "Load More" button
-    # .capture_list({
-    #     "selector": ".article",
-    #     "pagination": {"type": "clickLoadMore", "selector": "button.load-more"},
-    #     "maxItems": 30,
-    # })
-    # -------------------------------------------------------------------------
-
+from maxun import Maxun
 
 load_dotenv()
 
-if not os.environ.get("MAXUN_API_KEY"):
-    print("Error: MAXUN_API_KEY environment variable is required", file=sys.stderr)
-    sys.exit(1)
+
+async def main():
+    async with Maxun() as maxun:
+        robot = await (
+            maxun.extract("Open Library Trending", "https://openlibrary.org/trending/daily")
+            .capture_list(
+                "li.searchResultItem",
+                max_items=40,
+                pagination={"type": "clickNext", "selector": 'a[data-ol-link-track="Pager|Next"]'},
+            )
+            .build()
+        )
+        result = await robot.run()
+        print(f"{len(result.list_data)} books")
+        print(json.dumps(result.list_data[:3], indent=2))
+
+        # Change how many items are collected without rebuilding the robot.
+        await robot.set_list_limit(10)
+
 
 asyncio.run(main())

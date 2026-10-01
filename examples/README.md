@@ -1,52 +1,41 @@
-# Maxun Python SDK — Examples
-
-Python equivalents of every Node SDK example.
+# Examples
 
 ## Setup
 
-**1. Install the SDK** (from the `python-sdk/` directory):
+From the repository root:
 
 ```bash
 pip install -e .
-# With LLM support:
-pip install -e ".[all]"
-```
-
-**2. Set environment variables** (copy `.env.example` to `.env` and fill in your values):
-
-```bash
-cp ../.env.example ../.env
+cp .env.example .env    # then fill in MAXUN_API_KEY (and MAXUN_BASE_URL if self-hosted)
+python examples/simple_scrape.py
 ```
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+|---|---|---|
 | `MAXUN_API_KEY` | Your Maxun API key (required) | — |
-| `MAXUN_BASE_URL` | Base URL of your Maxun server | `https://app.maxun.dev/api/sdk/` |
-| `MAXUN_TEAM_ID` | Team UUID for team-scoped robots (optional) | — |
+| `MAXUN_BASE_URL` | SDK API URL | `https://app.maxun.dev/api/sdk/` (Cloud). Self-hosted: `http://localhost:8080/api/sdk/` |
+| `MAXUN_TEAM_ID` | Team for team-scoped robots (Cloud) | — |
 
-**3. Run any example:**
+On self-hosted Maxun, the LLM features (prompt extraction, document extraction, `summary`, Smart Queries) also need an LLM: see `llm_extraction.py`.
 
-```bash
-python examples/basic_extraction.py
-python examples/simple_scrape.py
-python examples/basic_crawl.py
-# ... etc.
-```
+## Files
 
-## Examples
-
-| File | Description | Node SDK equivalent |
-|------|-------------|---------------------|
-| [`basic_extraction.py`](./basic_extraction.py) | Extract specific fields with CSS selectors | [`basic-extraction.ts`](../../../maxun-sdks/examples/basic-extraction.ts) |
-| [`simple_scrape.py`](./simple_scrape.py) | Scrape a page as Markdown, HTML, or screenshot | [`simple-scrape.ts`](../../../maxun-sdks/examples/simple-scrape.ts) |
-| [`basic_crawl.py`](./basic_crawl.py) | Crawl multiple pages from a starting URL | [`basic-crawl.ts`](../../../maxun-sdks/examples/basic-crawl.ts) |
-| [`basic_search.py`](./basic_search.py) | Search the web and collect results | [`basic-search.ts`](../../../maxun-sdks/examples/basic-search.ts) |
-| [`chained_extract.py`](./chained_extract.py) | Multi-step: capture_text + capture_list on one page | [`chained-extract.ts`](../../../maxun-sdks/examples/chained-extract.ts) |
-| [`list_pagination.py`](./list_pagination.py) | Extract lists with scroll / click pagination | [`list-pagination.ts`](../../../maxun-sdks/examples/list-pagination.ts) |
-| [`llm_extraction.py`](./llm_extraction.py) | Use a natural-language prompt to build a robot | [`llm-extraction.ts`](../../../maxun-sdks/examples/llm-extraction.ts) |
-| [`scheduling.py`](./scheduling.py) | Schedule robots for periodic execution | [`scheduling.ts`](../../../maxun-sdks/examples/scheduling.ts) |
-| [`webhooks.py`](./webhooks.py) | Receive webhook notifications on run events | [`webhooks.ts`](../../../maxun-sdks/examples/webhooks.ts) |
-| [`robot_management.py`](./robot_management.py) | List, update, inspect runs, and delete robots | [`robot-management.ts`](../../../maxun-sdks/examples/robot-management.ts) |
-| [`complete_workflow.py`](./complete_workflow.py) | Full workflow: extract + webhook + schedule | [`complete-workflow.ts`](../../../maxun-sdks/examples/complete-workflow.ts) |
-| [`form_fill_screenshot.py`](./form_fill_screenshot.py) | Fill form inputs and capture screenshots | [`form-fill-screenshot.ts`](../../../maxun-sdks/examples/form-fill-screenshot.ts) |
-| [`team_robot.py`](./team_robot.py) | Create and run a robot scoped to a team | [`team-robot.ts`](../../../maxun-sdks/examples/team-robot.ts) |
+| File | Shows |
+|---|---|
+| [`simple_scrape.py`](./simple_scrape.py) | One page as Markdown, text and a screenshot |
+| [`smart_queries.py`](./smart_queries.py) | Asking an LLM a question about a page on each run |
+| [`basic_extraction.py`](./basic_extraction.py) | Capturing fields with CSS selectors |
+| [`list_pagination.py`](./list_pagination.py) | Lists across pages; changing the item limit |
+| [`chained_extract.py`](./chained_extract.py) | Text and a list from the same page |
+| [`form_fill_screenshot.py`](./form_fill_screenshot.py) | Typing into a form and taking screenshots |
+| [`llm_extraction.py`](./llm_extraction.py) | Building a robot from a plain-English prompt |
+| [`basic_crawl.py`](./basic_crawl.py) | Crawling part of a site |
+| [`basic_search.py`](./basic_search.py) | Web search in discover and scrape mode |
+| [`documents.py`](./documents.py) | Extracting from and converting PDF/DOCX/XLSX/CSV/images |
+| [`monitoring.py`](./monitoring.py) | Detecting changes between runs |
+| [`scheduling.py`](./scheduling.py) | Hourly, weekly and monthly schedules |
+| [`webhooks.py`](./webhooks.py) | Notifications when runs complete or fail |
+| [`robot_management.py`](./robot_management.py) | Listing, finding, renaming, copying and deleting robots |
+| [`team_robot.py`](./team_robot.py) | Robots in a team workspace |
+| [`complete_workflow.py`](./complete_workflow.py) | A scheduled, monitored list robot with a webhook |
+| [`sync_usage.py`](./sync_usage.py) | The SDK without async/await |
