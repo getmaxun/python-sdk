@@ -125,7 +125,7 @@ async def test_search_create(mock, maxun):
                                            "filters": {"timeRange": "week"}}
     await maxun.search.create("Q2", "just a query")
     assert body(route)["searchConfig"]["query"] == "just a query"
-    assert body(route)["searchConfig"]["mode"] == "scrape"
+    assert body(route)["searchConfig"]["mode"] == "discover"
 
 
 async def test_extract_builder(mock, maxun):

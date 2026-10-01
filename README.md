@@ -195,14 +195,14 @@ for page in result.crawl_data:
 ### Search
 
 ```python
-robot = await maxun.search("AI news", "AI model releases", mode="discover", time_range="week")
+robot = await maxun.search("AI news", "AI model releases", time_range="week")
 result = await robot.run()
 result.search_data
 ```
 
 | Argument | Default | |
 |---|---|---|
-| `mode` | `"scrape"` | `"discover"` returns titles, URLs and snippets; `"scrape"` also opens each result and scrapes it |
+| `mode` | `"discover"` | `"discover"` returns titles, URLs and snippets; `"scrape"` also opens each result and scrapes it |
 | `limit` | `10` | number of results |
 | `time_range` | any time | `"day"`, `"week"`, `"month"` or `"year"` |
 | `formats` | `["markdown"]` | what to capture from each result in scrape mode |
@@ -500,6 +500,7 @@ Existing code keeps working. `Extract(Config(...))`, `Scrape(...)`, `Crawl(...)`
   - `set_cookies()` and `mode()` were never supported by the server; they now warn and do nothing.
   - Steps added before `navigate()` raise an error.
 - **`CrawlConfig`/`SearchConfig`** now have working defaults. Before, leaving out `limit` or `max_depth` crawled nothing.
+- **Search defaults to `mode="discover"`** (titles, URLs and snippets) and `limit=10`. Before, leaving out `mode` scraped every result on the server; pass `mode="scrape"` for that.
 - **No more option classes.** Every call takes plain keyword arguments: `robot.schedule(run_every=6, run_every_unit="HOURS")`, `robot.add_webhook(url, events=[...], retry_attempts=5)`, `capture_list(selector, max_items=...)`. `ScheduleConfig`, `WebhookConfig`, `ExecutionOptions`, `CrawlConfig`, `SearchConfig`, `ExtractListConfig` and `PaginationConfig` still import (with a `DeprecationWarning`) so old code keeps running.
 - **`Config`** reads `MAXUN_API_KEY`/`MAXUN_BASE_URL`/`MAXUN_TEAM_ID` when arguments are left out.
 - **Return values:**
