@@ -590,6 +590,9 @@ def test_robot_and_config_hide_internals():
     assert robot.client is client and robot.robot_data["recording_meta"]["id"] == "f48"
 
 
+from maxun.robot import Run as Run_
+
+
 async def test_runs_are_summaries_with_results(mock, maxun):
     raw = {
         "id": "3faa", "runId": "bdae", "robotMetaId": "2c56", "robotId": "db-2c56", "name": "Example",
@@ -606,6 +609,8 @@ async def test_runs_are_summaries_with_results(mock, maxun):
     }
     mock.get("robots/r1").respond(json={"data": robot_record()})
     mock.get("robots/r1/runs").respond(json={"data": [raw, {**raw, "runId": "old", "startedAt": "", "finishedAt": ""}]})
+    narrow = Run_({**raw, "startedAt": "10/1/2026, 12:46:25\u202fPM"})
+    assert narrow.started_at == "2026-10-01T12:46:25Z"
     mock.get("robots/r1/runs/bdae").respond(json={"data": raw})
     robot = await maxun.robots.get("r1")
 

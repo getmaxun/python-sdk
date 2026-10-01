@@ -7,10 +7,16 @@ from .client import Client
 from .types import ExecutionOptions, Format, MaxunError, ScheduleConfig, WebhookConfig
 
 
+def _clean_time(value: str) -> str:
+    # Newer Node versions put a narrow no-break space before AM/PM.
+    return value.replace("\u202f", " ").replace("\u00a0", " ").strip()
+
+
 def _parse_time(value: Any) -> Optional[datetime]:
     """Run times come back as ISO strings or as "9/30/2026, 10:00:00 AM"."""
     if not isinstance(value, str):
         return None
+    value = _clean_time(value)
     for parse in (
         lambda v: datetime.fromisoformat(v.replace("Z", "+00:00")).replace(tzinfo=None),
         lambda v: datetime.strptime(v, "%m/%d/%Y, %I:%M:%S %p"),
@@ -31,13 +37,14 @@ def _to_iso(value: Any) -> Optional[str]:
     """
     if not value or not isinstance(value, str):
         return None
+    original, value = value, _clean_time(value)
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         try:
             parsed = datetime.strptime(value, "%m/%d/%Y, %I:%M:%S %p")
         except ValueError:
-            return value
+            return original
     if parsed.tzinfo is not None:
         parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
     return parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
