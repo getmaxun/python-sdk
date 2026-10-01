@@ -1,4 +1,5 @@
 # [Maxun Python SDK](https://docs.maxun.dev/sdk/python-sdk/sdk-overview)
+> ⚠️ Please upgrade to the latest version 0.0.13 for the best experience.
 
 The Maxun Python SDK turns websites and documents into structured data from your Python code. You create data scraping robots and run them whenever you need fresh data.
 
