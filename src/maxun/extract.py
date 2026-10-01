@@ -1,6 +1,6 @@
 from typing import Any, Awaitable, Optional, Union
 
-from ._naming import auto_name, check_url, describe_url, shorten
+from ._naming import check_name, check_url, looks_like_url
 from ._resource import Resource
 from .builders.extract_builder import ExtractBuilder
 from .llm_options import build_llm_payload
@@ -16,75 +16,54 @@ class Extract(Resource):
 
     def __call__(
         self,
+        name: str,
+        url: Optional[str] = None,
         *args: Any,
         prompt: Optional[str] = None,
-        name: Optional[str] = None,
         monitor: Optional[bool] = None,
         llm_provider: Optional[LLMProvider] = None,
         llm_model: Optional[str] = None,
         llm_api_key: Optional[str] = None,
         llm_base_url: Optional[str] = None,
-        **unexpected: Any,
     ) -> Union[ExtractBuilder, Awaitable[Robot]]:
         """Create an extraction robot.
 
         With a ``prompt``, Maxun builds the robot from plain English (the URL is
         optional; without it Maxun searches for a suitable page)::
 
-            robot = await maxun.extract("https://shop.example.com", prompt="Product names and prices")
+            robot = await maxun.extract("Products", "https://shop.example.com", prompt="Product names and prices")
+            robot = await maxun.extract("YC companies", prompt="Company names from the YC directory")
 
         Without a prompt, returns a builder for a selector-based robot that
         starts on ``url``::
 
-            robot = await maxun.extract("https://shop.example.com").capture_list({...}).build()
+            robot = await maxun.extract("Products", "https://shop.example.com").capture_list({...}).build()
 
-        :param name: Robot name. Defaults to one made from the URL and settings.
+        :param name: Robot name, as shown in Maxun.
         :param monitor: Compare every run with the previous one.
         :param llm_*: With a prompt, self-hosted Maxun only.
         """
-        # Signature: maxun.extract(url=None, *, prompt=None, name=None, monitor=None, llm_*=None)
-        keyword_url = unexpected.pop("url", None)
-        if unexpected:
-            raise TypeError(f"maxun.extract() got unexpected arguments: {', '.join(unexpected)}")
-        if len(args) > 1 or (args and keyword_url is not None):
-            raise TypeError(
-                "maxun.extract(url, prompt=...) takes the URL first and the settings as keyword "
-                "arguments. Pass the robot name as name=..."
-            )
-        url: Optional[str] = args[0] if args else keyword_url
+        call = "maxun.extract(name, url, ...)"
+        if args:
+            raise TypeError(f"{call} takes the settings as keyword arguments, e.g. prompt='...'.")
+        if looks_like_url(name) and url is None:
+            raise TypeError(f"{call} takes the robot name first, then the URL, e.g. maxun.extract('My robot', {name!r}).")
+        name = check_name(name, call)
         llm = {
             "llm_provider": llm_provider, "llm_model": llm_model,
             "llm_api_key": llm_api_key, "llm_base_url": llm_base_url,
         }
         if prompt is not None:
             if url is not None:
-                url = check_url(url, "maxun.extract(url, prompt=...)")
+                url = check_url(url, call)
             if not prompt.strip():
                 raise ValueError("prompt is required")
-            settings = {
-                "type": "extract",
-                "prompt": prompt.strip(),
-                "url": url,
-                "monitor": monitor,
-                **build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url),
-            }
-            subject = describe_url(url) if url else shorten(prompt)
-            return self._create_reusing(
-                name,
-                auto_name("Extract", subject, settings),
-                lambda robot_name: self.from_prompt(prompt, url=url, name=robot_name, monitor=monitor, **llm),
-            )
+            return self.from_prompt(prompt, url=url, name=name, monitor=monitor, **llm)
 
         if any(value is not None for value in llm.values()):
             raise TypeError("llm_* settings go with prompt=...; a selector robot does not use an LLM.")
-        if url is None:
-            raise TypeError(
-                'maxun.extract() needs a URL to start on, e.g. maxun.extract("https://example.com"), '
-                "or prompt=... to describe the data."
-            )
-        builder = ExtractBuilder(name)
-        builder.set_extractor(self)
-        builder.navigate(check_url(url, "maxun.extract(url)"))
+        builder = self.create(name)
+        builder.navigate(check_url(url, call, name))
         if monitor is not None:
             builder.monitor_changes(monitor)
         return builder
@@ -108,9 +87,7 @@ class Extract(Resource):
         if not builder.workflow:
             raise ValueError("The robot has no steps. Call navigate(url) and a capture_* method first.")
         if not builder.meta.get("name"):
-            workflow = builder.get_workflow()
-            settings = {"meta": {k: v for k, v in workflow["meta"].items() if k != "name"}, "workflow": workflow["workflow"]}
-            builder.name = builder.meta["name"] = auto_name("Extract", describe_url(builder.start_url or ""), settings)
+            raise ValueError("The robot needs a name: maxun.extract(name, url) or extract.create(name).")
         robot_data = await self.client.create_robot(builder.get_workflow())
         return Robot(self.client, robot_data)
 

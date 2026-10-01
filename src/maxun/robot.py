@@ -56,7 +56,7 @@ def _first_content(value: Any) -> Optional[str]:
     return None
 
 
-def result_from_run(raw: dict) -> "RunResult":
+def result_from_run(raw: dict, monitored: Optional[bool] = None) -> "RunResult":
     """Build a RunResult from a stored run, the same way the server builds the
     result of ``robot.run()``."""
     output = raw.get("serializableOutput") or {}
@@ -98,14 +98,17 @@ def result_from_run(raw: dict) -> "RunResult":
         "links": [link["url"] if isinstance(link, dict) and "url" in link else link for link in links],
         "documentData": (output.get("scrapeDoc") or {}).get("data"),
     }
-    return RunResult({
-        "runId": raw.get("runId"),
-        "status": raw.get("status"),
-        "hasChanges": bool(raw.get("hasChanges")),
-        "changedFormats": (output.get("_comparison") or {}).get("changedFormats") or [],
-        "data": data,
-        "screenshots": list((raw.get("binaryOutput") or {}).values()),
-    })
+    return RunResult(
+        {
+            "runId": raw.get("runId"),
+            "status": raw.get("status"),
+            "hasChanges": bool(raw.get("hasChanges")),
+            "changedFormats": (output.get("_comparison") or {}).get("changedFormats") or [],
+            "data": data,
+            "screenshots": list((raw.get("binaryOutput") or {}).values()),
+        },
+        monitored=monitored,
+    )
 
 
 class Run(dict):
@@ -118,6 +121,10 @@ class Run(dict):
     """
 
     _SUMMARY = ("id", "run_id", "robot_id", "name", "status", "started_at", "finished_at")
+
+    def __init__(self, raw: Optional[dict] = None, monitored: Optional[bool] = None):
+        super().__init__(raw or {})
+        self._monitored = monitored
 
     @property
     def id(self) -> Optional[str]:
@@ -155,7 +162,7 @@ class Run(dict):
     @property
     def result(self) -> "RunResult":
         """The run's output, in the same shape ``robot.run()`` returns."""
-        return result_from_run(self)
+        return result_from_run(self, getattr(self, "_monitored", None))
 
     def to_dict(self) -> Dict[str, Any]:
         """The summary fields."""
@@ -175,37 +182,98 @@ class Run(dict):
 MONITORABLE_TYPES = ("scrape", "crawl", "extract")
 
 
+# (key in the result, key in the server's run data)
+_RESULT_FIELDS = (
+    ("text", "text"),
+    ("markdown", "markdown"),
+    ("html", "html"),
+    ("summary", "summary"),
+    ("links", "links"),
+    ("textData", "textData"),
+    ("listData", "listData"),
+    ("crawlData", "crawlData"),
+    ("searchData", "searchData"),
+    ("smartQueryResult", "promptResult"),
+    ("documentData", "documentData"),
+)
+
+
+def _has_value(value: Any) -> bool:
+    return value is not None and value != "" and value != [] and value != {}
+
+
+def _result_fields(raw: dict, monitored: Optional[bool]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {"runId": raw.get("runId"), "status": raw.get("status")}
+    data = raw.get("data") or {}
+    for key, source in _RESULT_FIELDS:
+        if _has_value(data.get(source)):
+            out[key] = data[source]
+    if raw.get("screenshots"):
+        out["screenshots"] = raw["screenshots"]
+    if monitored is None:
+        monitored = bool(raw.get("hasChanges") or raw.get("changedFormats") or raw.get("changedPages"))
+    if monitored:
+        out["hasChanges"] = bool(raw.get("hasChanges"))
+        out["changedFormats"] = list(raw.get("changedFormats") or [])
+        if raw.get("changedPages") is not None:
+            out["changedPages"] = raw["changedPages"]
+    return out
+
+
 class RunResult(dict):
     """The result of ``robot.run()``.
 
-    It is a plain dict (so ``result["data"]["listData"]`` keeps working) with
-    attributes for the common fields:
+    It holds the run id, the status and only the outputs the run produced,
+    e.g. ``{"runId": ..., "status": "success", "markdown": "...", "screenshots": [...]}``.
+    ``hasChanges`` and ``changedFormats`` are included when the robot has
+    change monitoring on.
+
+    Attributes read the same values, and are always safe to use (an output the
+    run didn't produce is ``None`` or empty):
 
     - ``run_id``, ``status``
-    - ``markdown``, ``html``, ``text``, ``summary`` - scrape/crawl page content
+    - ``markdown``, ``html``, ``text``, ``summary``, ``links`` - page content
     - ``text_data`` - fields captured with ``capture_text`` (dict)
-    - ``list_data`` - items captured with ``capture_list`` or LLM extraction (list)
+    - ``list_data`` - items captured with ``capture_list`` or prompt extraction (list)
     - ``crawl_data`` - one entry per crawled page (list)
     - ``search_data`` - search results (dict)
     - ``smart_query_result`` - the LLM's answer to a Smart Query
-    - ``links`` - URLs found on the page (when the ``links`` format is on)
     - ``document_data`` - data pulled from a file by a document-extract robot
     - ``screenshots`` - screenshots taken during the run
-    - ``has_changes``, ``changed_formats`` - monitoring results
-    - ``changed_pages`` - crawl robots: ``{"added", "removed", "changed"}`` page URLs
+    - ``has_changes``, ``changed_formats``, ``changed_pages`` - monitoring results
+
+    Code written for 0.0.x, like ``result["data"]["listData"]``, still works.
     """
+
+    def __init__(self, raw: Optional[dict] = None, monitored: Optional[bool] = None):
+        raw = dict(raw or {})
+        super().__init__(_result_fields(raw, monitored))
+        self._raw = raw
+
+    # Older code read the server's shape (result["data"], result.get("screenshots")).
+    def __missing__(self, key: str) -> Any:
+        raw = self.__dict__.get("_raw", {})
+        if key in raw:
+            return raw[key]
+        raise KeyError(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if dict.__contains__(self, key):
+            return dict.__getitem__(self, key)
+        return self.__dict__.get("_raw", {}).get(key, default)
 
     @property
     def run_id(self) -> Optional[str]:
-        return self.get("runId")
+        return self._raw.get("runId")
 
     @property
     def status(self) -> Optional[str]:
-        return self.get("status")
+        return self._raw.get("status")
 
     @property
     def data(self) -> Dict[str, Any]:
-        return self.get("data") or {}
+        """The server's raw output, as 0.0.x returned it."""
+        return self._raw.get("data") or {}
 
     @property
     def markdown(self) -> Optional[str]:
@@ -253,19 +321,19 @@ class RunResult(dict):
 
     @property
     def screenshots(self) -> List[Any]:
-        return self.get("screenshots") or []
+        return self._raw.get("screenshots") or []
 
     @property
     def has_changes(self) -> bool:
-        return bool(self.get("hasChanges"))
+        return bool(self._raw.get("hasChanges"))
 
     @property
     def changed_formats(self) -> List[str]:
-        return self.get("changedFormats") or []
+        return self._raw.get("changedFormats") or []
 
     @property
     def changed_pages(self) -> Dict[str, List[str]]:
-        return self.get("changedPages") or {"added": [], "removed": [], "changed": []}
+        return self._raw.get("changedPages") or {"added": [], "removed": [], "changed": []}
 
 
 class Robot:
@@ -357,51 +425,52 @@ class Robot:
         for key, value in (("formats", formats), ("smart_queries", smart_queries), ("timeout", timeout)):
             if value is not None:
                 merged[key] = value
-        result = RunResult(await self.client.execute_robot(self.id, merged))
-        await self._add_missing_outputs(result, merged.get("formats") or self.formats)
+        raw = dict(await self.client.execute_robot(self.id, merged))
+        await self._add_missing_outputs(raw, merged.get("formats") or self.formats)
         if self.type == "crawl" and self.is_monitoring:
-            await self._compare_crawl_run(result)
-        return result
+            await self._compare_crawl_run(raw)
+        return RunResult(raw, monitored=self.is_monitoring)
 
-    async def _compare_crawl_run(self, result: RunResult) -> None:
+    async def _compare_crawl_run(self, result: dict) -> None:
         """The server does not compare crawl runs, so the SDK does it."""
-        if not result.run_id:
+        run_id = result.get("runId")
+        if not run_id:
             return
         try:
             runs = await self._raw_runs()
         except MaxunError as e:
             warn(f"The run succeeded but could not be compared with the previous run: {e}")
             return
-        current = next((r for r in runs if r.get("runId") == result.run_id), None)
+        current = next((r for r in runs if r.get("runId") == run_id), None)
         output = (current or {}).get("serializableOutput") or {}
         if "_comparison" in output:
             return  # the server compared it
-        previous = previous_successful_run(runs, result.run_id)
+        previous = previous_successful_run(runs, run_id)
         if previous is None:
             result["changedPages"] = {"added": [], "removed": [], "changed": []}
             return
         changed_formats, pages = compare_crawl(
             crawl_pages((previous.get("serializableOutput") or {}).get("crawl")),
-            crawl_pages(output.get("crawl")) or result.crawl_data,
+            crawl_pages(output.get("crawl")) or (result.get("data") or {}).get("crawlData") or [],
         )
         result["hasChanges"] = bool(changed_formats)
         result["changedFormats"] = changed_formats
         result["changedPages"] = pages
 
-    async def _add_missing_outputs(self, result: RunResult, formats: List[str]) -> None:
+    async def _add_missing_outputs(self, result: dict, formats: List[str]) -> None:
         """The run endpoint leaves out links and document-extract data, so read
         them from the stored run."""
         wants_links = "links" in (formats or [])
         is_document = self.type == "doc-extract"
-        if not (wants_links or is_document) or not result.run_id:
+        if not (wants_links or is_document) or not result.get("runId"):
             return
         try:
-            run = await self.client.get_run(self.id, result.run_id)
+            run = await self.client.get_run(self.id, result["runId"])
         except MaxunError as e:
             warn(f"The run succeeded but its links/document data could not be loaded: {e}")
             return
         output = run.get("serializableOutput") or {}
-        data = dict(result.data)
+        data = dict(result.get("data") or {})
         if wants_links:
             links = output.get("links") or (output.get("scrape") or {}).get("links") or []
             data["links"] = [
@@ -420,10 +489,10 @@ class Robot:
 
     async def get_runs(self) -> List[Run]:
         """All runs of this robot, newest first. Each run's output is in ``run.result``."""
-        return [Run(raw) for raw in await self._raw_runs()]
+        return [Run(raw, self.is_monitoring) for raw in await self._raw_runs()]
 
     async def get_run(self, run_id: str) -> Run:
-        return Run(await self.client.get_run(self.id, run_id))
+        return Run(await self.client.get_run(self.id, run_id), self.is_monitoring)
 
     async def get_latest_run(self) -> Optional[Run]:
         runs = await self.get_runs()

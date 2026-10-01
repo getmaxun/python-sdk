@@ -10,12 +10,12 @@ load_dotenv()
 
 async def main():
     async with Maxun() as maxun:
-        robot = await maxun.search("AI model releases", mode="discover", time_range="week", limit=10)
+        robot = await maxun.search("AI News This Week", "AI model releases", mode="discover", time_range="week", limit=10)
         result = await robot.run()
         print(json.dumps(result.search_data, indent=2)[:2000])
 
         # Scrape mode (the default): also scrapes each result as markdown
-        robot = await maxun.search("python packaging news", limit=5)
+        robot = await maxun.search("Python Packaging News", "python packaging news", limit=5)
 
 
 asyncio.run(main())

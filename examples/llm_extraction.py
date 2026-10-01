@@ -27,6 +27,7 @@ async def main():
     async with Maxun() as maxun:
         # With a URL
         robot = await maxun.extract(
+            "YC Companies",
             "https://www.ycombinator.com/companies",
             prompt="Extract the first 15 company names, descriptions and batch",
             **LLM,
@@ -36,6 +37,7 @@ async def main():
 
         # Without a URL, Maxun searches for a suitable page first
         robot = await maxun.extract(
+            "YC Companies (auto-search)",
             prompt="Company names and descriptions from the Y Combinator companies directory",
             **LLM,
         )

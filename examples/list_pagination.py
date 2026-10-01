@@ -19,7 +19,7 @@ load_dotenv()
 async def main():
     async with Maxun() as maxun:
         robot = await (
-            maxun.extract("https://openlibrary.org/trending/daily", name="Open Library Trending")
+            maxun.extract("Open Library Trending", "https://openlibrary.org/trending/daily")
             .capture_list({
                 "selector": "li.searchResultItem",
                 "pagination": {"type": "clickNext", "selector": 'a[data-ol-link-track="Pager|Next"]'},

@@ -11,6 +11,7 @@ async def main():
     async with Maxun() as maxun:
         # A single page
         page = await maxun.scrape(
+            "World Population Monitor",
             "https://www.worldometers.info/world-population/",
             formats=["text"],
             monitor=True,             # or later: await page.set_monitoring(True)
@@ -27,14 +28,14 @@ async def main():
                     print("+" if change["added"] else "-", change["value"][:200])
 
         # A whole section of a site: also reports which pages appeared, vanished or changed
-        site = await maxun.crawl("https://www.ycombinator.com/blog", mode="path", limit=10, monitor=True)
+        site = await maxun.crawl("YC Blog Monitor", "https://www.ycombinator.com/blog", mode="path", limit=10, monitor=True)
         await site.run()
         result = await site.run()
         print("Pages:", result.changed_pages)
 
         # Captured data from selectors
         listing = await (
-            maxun.extract("https://news.ycombinator.com", monitor=True)
+            maxun.extract("HN Front Page Monitor", "https://news.ycombinator.com", monitor=True)
             .capture_list({"selector": "tr.athing", "max_items": 30})
             .build()
         )

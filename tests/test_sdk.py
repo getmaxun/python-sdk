@@ -186,7 +186,7 @@ async def test_llm_settings_validated(maxun):
 ])
 async def test_document_extract_mime(mock, maxun, name, mime):
     route = mock.post("robots/document").respond(201, json={"success": True, "data": robot_record(type_="doc-extract")})
-    robot = await maxun.documents.extract(b"bytes", "totals", file_name=name, name="D")
+    robot = await maxun.documents.extract("D", b"bytes", "totals", file_name=name)
     content = route.calls[-1].request.content
     assert f"Content-Type: {mime}".encode() in content
     assert b'name="prompt"' in content and b'name="robotName"' in content
@@ -197,24 +197,24 @@ async def test_document_parse_formats(mock, maxun, tmp_path):
     f = tmp_path / "report.xlsx"
     f.write_bytes(b"x")
     route = mock.post("robots/document-parse").respond(201, json={"data": robot_record(type_="doc-parse")})
-    await maxun.documents.parse(f, formats=["markdown", "links"])
+    await maxun.documents.parse("P", f, formats=["markdown", "links"])
     content = route.calls[-1].request.content
     assert content.count(b'name="outputFormats[]"') == 2
-    await maxun.documents.parse(str(f))  # default: server uses all formats
+    await maxun.documents.parse("P", str(f))  # default: server uses all formats
     assert b"outputFormats" not in route.calls[-1].request.content
     with pytest.raises(ValueError, match="Invalid document formats"):
-        await maxun.documents.parse(f, formats=["text"])
+        await maxun.documents.parse("P", f, formats=["text"])
 
 
 async def test_document_unsupported_type(maxun):
     with pytest.raises(ValueError, match="Unsupported document type"):
-        await maxun.documents.parse(b"x", file_name="a.txt")
+        await maxun.documents.parse("P", b"x", file_name="a.txt")
 
 
 async def test_document_error_is_maxun_error(mock, maxun):
     mock.post("robots/document").respond(409, json={"error": "A robot named \"D\" already exists."})
     with pytest.raises(ConflictError):
-        await maxun.documents.extract(b"x", "p", file_name="a.pdf", name="D")
+        await maxun.documents.extract("D", b"x", "p", file_name="a.pdf")
 
 
 # ---------- robot management ----------
@@ -467,114 +467,6 @@ def test_sync_init_failure_stops_thread(monkeypatch):
 
 # ---------- URL-first calls ----------
 
-async def test_scrape_url_first(mock, maxun):
-    route = mock.post("robots").respond(201, json={"data": robot_record()})
-    robot = await maxun.scrape("https://maxun.dev/pricing/", formats=["markdown", "html"], monitor=True)
-    meta = body(route)["meta"]
-    assert meta["url"] == "https://maxun.dev/pricing/" and meta["formats"] == ["markdown", "html"]
-    assert meta["compareRuns"] is True
-    assert re.fullmatch(r"Scrape: maxun\.dev/pricing \[[0-9a-f]{6}\]", meta["name"])
-    assert robot.id == "r1"
-
-    # The same call gives the same name; different settings give a different one.
-    first = meta["name"]
-    await maxun.scrape("https://maxun.dev/pricing/", formats=["markdown", "html"], monitor=True)
-    assert body(route)["meta"]["name"] == first
-    await maxun.scrape("https://maxun.dev/pricing/", formats=["markdown"])
-    assert body(route)["meta"]["name"] != first
-
-    await maxun.scrape("https://maxun.dev", name="Home", smart_queries="Price?")
-    assert body(route)["meta"]["name"] == "Home"
-    assert body(route)["meta"]["promptInstructions"] == "Price?"
-
-
-async def test_url_first_catches_old_argument_order(maxun):
-    with pytest.raises(TypeError):
-        await maxun.scrape("My robot", "https://e.com")
-    with pytest.raises(ValueError, match="URL first"):
-        await maxun.scrape("My robot")
-    with pytest.raises(ValueError, match="URL first"):
-        maxun.extract("Products")
-
-
-async def test_crawl_url_first(mock, maxun):
-    route = mock.post("crawl").respond(201, json={"data": robot_record(type_="crawl")})
-    await maxun.crawl("https://docs.e.com", limit=5, max_depth=2, include_paths=["/blog/*"], formats=["text"])
-    sent = body(route)
-    assert sent["url"] == "https://docs.e.com" and sent["formats"] == ["text"]
-    assert sent["crawlConfig"] == {
-        "mode": "domain", "limit": 5, "maxDepth": 2, "includePaths": ["/blog/*"],
-        "respectRobots": True, "useSitemap": True, "followLinks": True,
-    }
-    assert sent["name"].startswith("Crawl: docs.e.com [")
-
-
-async def test_search_query_first(mock, maxun):
-    route = mock.post("search").respond(201, json={"data": robot_record(type_="search")})
-    await maxun.search("AI model releases", mode="discover", time_range="week", limit=5)
-    sent = body(route)
-    assert sent["searchConfig"] == {"query": "AI model releases", "mode": "discover", "limit": 5,
-                                    "filters": {"timeRange": "week"}}
-    assert sent["name"].startswith("Search: AI model releases [")
-
-
-async def test_extract_url_first(mock, maxun):
-    route = mock.post("robots").respond(201, json={"data": robot_record(type_="extract")})
-    robot = await maxun.extract("https://e.com", monitor=True).capture_text({"T": "h1"}).build()
-    sent = body(route)
-    assert sent["meta"]["type"] == "extract" and sent["meta"]["compareRuns"] is True
-    assert sent["meta"]["name"].startswith("Extract: e.com [")
-    assert sent["workflow"][-1]["what"][0] == {"action": "goto", "args": ["https://e.com"]}
-    assert robot.type == "extract"
-
-    await maxun.extract("https://e.com", name="Titles").capture_text({"T": "h1"}).build()
-    assert body(route)["meta"]["name"] == "Titles"
-
-    llm = mock.post("extract/llm").respond(json={"data": {"robotId": "r1"}})
-    mock.get("robots/r1").respond(json={"data": robot_record(type_="extract")})
-    await maxun.extract("https://e.com", prompt="prices", llm_provider="ollama")
-    sent = body(llm)
-    assert sent["prompt"] == "prices" and sent["url"] == "https://e.com" and sent["llmProvider"] == "ollama"
-    assert sent["robotName"].startswith("Extract: e.com [")
-    await maxun.extract(prompt="YC companies and batches")
-    assert "url" not in body(llm) and body(llm)["robotName"].startswith("Extract: YC companies and batches [")
-
-    with pytest.raises(TypeError):
-        maxun.extract()
-    with pytest.raises(TypeError):
-        maxun.extract("https://e.com", llm_provider="ollama")
-
-
-async def test_documents_reuse_robot_with_generated_name(mock, maxun):
-    existing = robot_record("d9", type_="doc-extract")
-    route = mock.post("robots/document").respond(409, json={"error": "exists"})
-    mock.get("robots").mock(side_effect=lambda r: httpx.Response(200, json={"data": [existing]}))
-    with pytest.raises(ConflictError):
-        await maxun.documents.extract(b"x", "totals", file_name="a.pdf", name="Mine")
-
-    robot_name = None
-
-    def capture(request):
-        nonlocal robot_name
-        robot_name = re.search(rb'name="robotName"\r\n\r\n([^\r]*)', request.content).group(1).decode()
-        existing["recording_meta"]["name"] = robot_name
-        return httpx.Response(409, json={"error": "exists"})
-
-    route.mock(side_effect=capture)
-    robot = await maxun.documents.extract(b"x", "totals", file_name="a.pdf")
-    assert robot_name.startswith("Document: a.pdf [") and robot.id == "d9"
-
-
-def test_sync_url_first(mock):
-    mock.post("robots").respond(201, json={"data": robot_record()})
-    mock.post("extract/llm").respond(json={"data": {"robotId": "r1"}})
-    mock.get("robots/r1").respond(json={"data": robot_record(type_="extract")})
-    with MaxunSync(api_key="k", base_url=BASE) as m:
-        assert m.scrape("https://e.com").id == "r1"
-        assert m.extract("https://e.com", prompt="prices").type == "extract"
-        assert m.extract("https://e.com").capture_text({"T": "h1"}).build().id == "r1"
-
-
 # ---------- clean output ----------
 
 def test_robot_and_config_hide_internals():
@@ -727,27 +619,6 @@ async def test_monitoring_only_for_supported_types(mock, maxun):
 
 # ---------- review follow-ups ----------
 
-async def test_old_argument_order_gets_a_clear_message(maxun):
-    for call in (
-        lambda: maxun.scrape("Home", "https://e.com"),
-        lambda: maxun.crawl("Docs", "https://e.com"),
-        lambda: maxun.search("My search", "AI"),
-    ):
-        with pytest.raises(TypeError, match="name=..."):
-            await call()
-    with pytest.raises(TypeError, match="name=..."):
-        maxun.extract("Products", prompt="prices", url="https://e.com")
-    with pytest.raises(TypeError, match="unexpected arguments: robot_name"):
-        maxun.extract("https://e.com", robot_name="x")
-
-
-async def test_keyword_url_still_works(mock, maxun):
-    llm = mock.post("extract/llm").respond(json={"data": {"robotId": "r1"}})
-    mock.get("robots/r1").respond(json={"data": robot_record(type_="extract")})
-    await maxun.extract(url="https://e.com", prompt="prices")
-    assert body(llm)["url"] == "https://e.com"
-
-
 def test_runs_still_behave_like_dicts():
     from maxun.robot import Run as RunClass
     raw = {"id": "1", "runId": "r", "status": "success", "startedAt": "2026-10-01T00:00:00Z"}
@@ -759,30 +630,132 @@ def test_runs_still_behave_like_dicts():
     assert str([run]).startswith("[Run(")
 
 
-async def test_generated_names_reuse_the_robot_on_conflict(mock, maxun):
-    created = {}
-
-    def create(request):
-        created["name"] = json.loads(request.content)["meta"]["name"]
-        return httpx.Response(409, json={"error": "exists with a different configuration"})
-
-    mock.post("robots").mock(side_effect=create)
-    mock.get("robots").mock(side_effect=lambda r: httpx.Response(
-        200, json={"data": [robot_record("old", name=created.get("name"))]}))
-    robot = await maxun.scrape("https://e.com")
-    assert robot.id == "old"
-    with pytest.raises(ConflictError):
-        await maxun.scrape("https://e.com", name="Mine")
-
-    llm = mock.post("extract/llm").respond(409, json={"error": "exists"})
-    mock.get("robots").mock(side_effect=lambda r: httpx.Response(
-        200, json={"data": [robot_record("p", type_="extract", name=json.loads(llm.calls[-1].request.content)["robotName"])]}))
-    assert (await maxun.extract(prompt="YC companies")).id == "p"
 
 
-async def test_default_formats_do_not_change_generated_names(mock, maxun):
+# ---------- name-first calls ----------
+
+async def test_scrape_name_first(mock, maxun):
+    route = mock.post("robots").respond(201, json={"data": robot_record()})
+    robot = await maxun.scrape("Maxun home", "https://maxun.dev", formats=["markdown", "html"], monitor=True)
+    meta = body(route)["meta"]
+    assert meta == {"name": "Maxun home", "type": "scrape", "url": "https://maxun.dev",
+                    "formats": ["markdown", "html"], "compareRuns": True}
+    assert robot.id == "r1"
+    await maxun.scrape("Q&A", "https://e.com", smart_queries=" Price? ")
+    assert body(route)["meta"]["promptInstructions"] == "Price?"
+
+
+async def test_names_are_required_and_order_is_checked(maxun):
+    with pytest.raises(TypeError, match="robot name first"):
+        await maxun.scrape("https://maxun.dev")
+    with pytest.raises(ValueError, match="needs a robot name"):
+        await maxun.scrape("", "https://maxun.dev")
+    with pytest.raises(ValueError, match="second argument"):
+        await maxun.scrape("Home", "My robot")
+    with pytest.raises(TypeError, match="keyword arguments"):
+        await maxun.scrape("Home", "https://e.com", ["markdown"])
+    with pytest.raises(TypeError, match="robot name first"):
+        maxun.extract("https://e.com", prompt="prices")
+    with pytest.raises(ValueError, match="needs a search query"):
+        await maxun.search("AI news")
+    with pytest.raises(ValueError, match="needs a robot name"):
+        await maxun.documents.extract("", b"x", "totals", file_name="a.pdf")
+
+
+async def test_crawl_name_first(mock, maxun):
     route = mock.post("crawl").respond(201, json={"data": robot_record(type_="crawl")})
-    await maxun.crawl("https://e.com")
-    first = body(route)["name"]
-    await maxun.crawl("https://e.com", formats=["markdown"])
-    assert body(route)["name"] == first
+    await maxun.crawl("Docs", "https://docs.e.com", limit=5, max_depth=2, include_paths=["/blog/*"], formats=["text"])
+    sent = body(route)
+    assert sent["name"] == "Docs" and sent["url"] == "https://docs.e.com" and sent["formats"] == ["text"]
+    assert sent["crawlConfig"] == {
+        "mode": "domain", "limit": 5, "maxDepth": 2, "includePaths": ["/blog/*"],
+        "respectRobots": True, "useSitemap": True, "followLinks": True,
+    }
+
+
+async def test_search_name_first(mock, maxun):
+    route = mock.post("search").respond(201, json={"data": robot_record(type_="search")})
+    await maxun.search("AI news", "AI model releases", mode="discover", time_range="week", limit=5)
+    sent = body(route)
+    assert sent["name"] == "AI news"
+    assert sent["searchConfig"] == {"query": "AI model releases", "mode": "discover", "limit": 5,
+                                    "filters": {"timeRange": "week"}}
+
+
+async def test_extract_name_first(mock, maxun):
+    route = mock.post("robots").respond(201, json={"data": robot_record(type_="extract")})
+    await maxun.extract("Titles", "https://e.com", monitor=True).capture_text({"T": "h1"}).build()
+    sent = body(route)
+    assert sent["meta"] == {"name": "Titles", "type": "extract", "compareRuns": True}
+    assert sent["workflow"][-1]["what"][0] == {"action": "goto", "args": ["https://e.com"]}
+
+    llm = mock.post("extract/llm").respond(json={"data": {"robotId": "r1"}})
+    mock.get("robots/r1").respond(json={"data": robot_record(type_="extract")})
+    await maxun.extract("Prices", "https://e.com", prompt=" prices ", llm_provider="ollama")
+    assert body(llm) == {"prompt": "prices", "url": "https://e.com", "robotName": "Prices", "llmProvider": "ollama"}
+    await maxun.extract("YC", prompt="YC companies")
+    assert body(llm) == {"prompt": "YC companies", "robotName": "YC"}
+
+    with pytest.raises(TypeError):
+        maxun.extract("Titles", "https://e.com", llm_provider="ollama")
+    with pytest.raises(ValueError, match="needs a URL"):
+        maxun.extract("Titles")
+
+
+def test_sync_name_first(mock):
+    mock.post("robots").respond(201, json={"data": robot_record()})
+    mock.post("extract/llm").respond(json={"data": {"robotId": "r1"}})
+    mock.get("robots/r1").respond(json={"data": robot_record(type_="extract")})
+    with MaxunSync(api_key="k", base_url=BASE) as m:
+        assert m.scrape("Home", "https://e.com").id == "r1"
+        assert m.extract("Prices", "https://e.com", prompt="prices").type == "extract"
+        assert m.extract("Titles", "https://e.com").capture_text({"T": "h1"}).build().id == "r1"
+
+
+# ---------- run results ----------
+
+async def test_run_result_shows_only_produced_outputs(mock, maxun):
+    mock.get("robots/r1").respond(json={"data": robot_record()})
+    raw = {
+        "runId": "b05c", "status": "success", "hasChanges": False, "changedFormats": [],
+        "data": {"textData": {}, "listData": [], "crawlData": [], "searchData": {},
+                 "text": "abc", "markdown": "# Example", "promptResult": None},
+        "screenshots": [],
+    }
+    mock.post("robots/r1/execute").respond(json={"data": raw})
+    robot = await maxun.robots.get("r1")
+    result = await robot.run()
+    assert dict(result) == {"runId": "b05c", "status": "success", "text": "abc", "markdown": "# Example"}
+    assert json.loads(json.dumps(result)) == dict(result)
+    assert repr(result) == repr({"runId": "b05c", "status": "success", "text": "abc", "markdown": "# Example"})
+    # Attributes and 0.0.x-style access still work.
+    assert result.list_data == [] and result.text_data == {} and result.screenshots == []
+    assert result.has_changes is False and result.smart_query_result is None
+    assert result["data"]["listData"] == [] and result.get("data", {}).get("text") == "abc"
+    assert result.get("screenshots") == [] and result.get("missing", 1) == 1
+
+    raw["screenshots"] = ["https://s/1.png"]
+    raw["data"]["listData"] = [{"a": 1}]
+    raw["data"]["promptResult"] = "42"
+    mock.post("robots/r1/execute").respond(json={"data": raw})
+    result = await robot.run()
+    assert result["screenshots"] == ["https://s/1.png"] and result["listData"] == [{"a": 1}]
+    assert result["smartQueryResult"] == "42" and result.smart_query_result == "42"
+
+
+async def test_monitoring_fields_only_when_monitoring_is_on(mock, maxun):
+    raw = {"runId": "x", "status": "success", "hasChanges": False, "changedFormats": [], "data": {"markdown": "m"}}
+    mock.get("robots/off").respond(json={"data": robot_record("off")})
+    mock.get("robots/on").respond(json={"data": robot_record("on", compareRuns=True)})
+    mock.post("robots/off/execute").respond(json={"data": raw})
+    mock.post("robots/on/execute").respond(json={"data": raw})
+    off = await (await maxun.robots.get("off")).run()
+    on = await (await maxun.robots.get("on")).run()
+    assert "hasChanges" not in off and "changedFormats" not in off
+    assert on["hasChanges"] is False and on["changedFormats"] == []
+
+    stored = {"runId": "x", "status": "success", "serializableOutput": {"markdown": [{"content": "m"}]}}
+    mock.get("robots/off/runs").respond(json={"data": [stored]})
+    mock.get("robots/on/runs").respond(json={"data": [stored]})
+    assert "hasChanges" not in (await (await maxun.robots.get("off")).get_runs())[0].result
+    assert "hasChanges" in (await (await maxun.robots.get("on")).get_runs())[0].result

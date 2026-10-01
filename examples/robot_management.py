@@ -9,7 +9,7 @@ load_dotenv()
 
 async def main():
     async with Maxun() as maxun:
-        robot = await maxun.scrape("https://books.toscrape.com", name="Books Scraper")
+        robot = await maxun.scrape("Books Scraper", "https://books.toscrape.com")
 
         print(await maxun.robots.list())                            # every robot: id, name, type
         print(await maxun.scrape.list())                            # only scrape robots

@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
 
-from ._naming import auto_name, shorten
+from ._naming import check_name, check_no_extra
 from ._resource import Resource
 from ._utils import to_payload, warn
 from .llm_options import build_llm_payload
@@ -65,9 +65,9 @@ class Search(Resource):
 
     async def __call__(
         self,
-        query: str,
+        name: str,
+        query: Optional[str] = None,
         *args: Any,
-        name: Optional[str] = None,
         mode: SearchMode = "scrape",
         limit: int = 10,
         time_range: Optional[SearchTimeRange] = None,
@@ -79,36 +79,24 @@ class Search(Resource):
     ) -> Robot:
         """Create a search robot::
 
-            robot = await maxun.search("AI model releases", mode="discover", time_range="week")
+            robot = await maxun.search("AI news", "AI model releases", mode="discover", time_range="week")
 
+        :param name: Robot name, as shown in Maxun.
+        :param query: What to search for.
         :param mode: ``"discover"`` returns titles, URLs and snippets;
             ``"scrape"`` (default) also scrapes every result.
         :param limit: Number of results.
         :param time_range: ``"day"``, ``"week"``, ``"month"`` or ``"year"``.
         :param formats: What to capture from each result in scrape mode. Defaults to ["markdown"].
-        :param name: Robot name. Defaults to one made from the query and settings.
         :param llm_*: Self-hosted Maxun only, needed for the ``summary`` format.
         """
-        if args:
-            raise TypeError(
-                "maxun.search(query, ...) takes the query first and the settings as keyword arguments. "
-                "Pass the robot name as name=..."
-            )
+        call = "maxun.search(name, query, ...)"
+        check_no_extra(args, call)
+        name = check_name(name, call)
         if not isinstance(query, str) or not query.strip():
-            raise ValueError('maxun.search(query, ...) needs a search query, e.g. maxun.search("AI news").')
+            raise ValueError("maxun.search(name, query, ...) needs a search query, e.g. maxun.search('AI news', 'AI model releases').")
         config = SearchConfig(query=query.strip(), mode=mode, limit=limit, time_range=time_range)
-        settings = {
-            "type": "search",
-            "searchConfig": to_payload(config),
-            "formats": check_formats(formats) or (["markdown"] if mode == "scrape" else None),
-            **build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url),
-        }
         return await self.create(
-            name or auto_name("Search", shorten(query), settings),
-            config,
-            formats=formats,
-            llm_provider=llm_provider,
-            llm_model=llm_model,
-            llm_api_key=llm_api_key,
-            llm_base_url=llm_base_url,
+            name, config, formats=formats, llm_provider=llm_provider, llm_model=llm_model,
+            llm_api_key=llm_api_key, llm_base_url=llm_base_url,
         )

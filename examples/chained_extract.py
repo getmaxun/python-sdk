@@ -12,7 +12,7 @@ load_dotenv()
 async def main():
     async with Maxun() as maxun:
         robot = await (
-            maxun.extract("https://www.bbc.com/sport/football/tables", name="Premier League Table")
+            maxun.extract("Premier League Table", "https://www.bbc.com/sport/football/tables")
             .capture_text({"Title": "h1"}, name="Heading")
             .capture_list({"selector": "table tbody tr", "max_items": 20}, name="Standings")
             .build()

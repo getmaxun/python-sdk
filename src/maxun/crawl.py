@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
 
-from ._naming import auto_name, check_url, describe_url
+from ._naming import check_name, check_no_extra, check_url
 from ._resource import Resource
 from ._utils import to_payload
 from .llm_options import build_llm_payload
@@ -57,9 +57,9 @@ class Crawl(Resource):
 
     async def __call__(
         self,
-        url: str,
+        name: str,
+        url: Optional[str] = None,
         *args: Any,
-        name: Optional[str] = None,
         mode: CrawlMode = "domain",
         limit: int = 50,
         max_depth: int = 3,
@@ -77,8 +77,10 @@ class Crawl(Resource):
     ) -> Robot:
         """Create a crawl robot::
 
-            robot = await maxun.crawl("https://docs.example.com", limit=20, formats=["markdown"])
+            robot = await maxun.crawl("Docs", "https://docs.example.com", limit=20, formats=["markdown"])
 
+        :param name: Robot name, as shown in Maxun.
+        :param url: Where the crawl starts.
         :param mode: Stay on the same ``"domain"``, ``"subdomain"`` or URL ``"path"``.
         :param limit: Maximum number of pages.
         :param max_depth: How many links deep to follow.
@@ -86,33 +88,19 @@ class Crawl(Resource):
         :param exclude_paths: URL patterns to skip.
         :param formats: What to capture from each page. Defaults to ["markdown"].
         :param monitor: Compare every run with the previous one.
-        :param name: Robot name. Defaults to one made from the URL and settings.
         :param llm_*: Self-hosted Maxun only, needed for the ``summary`` format.
         """
-        if args:
-            raise TypeError(
-                "maxun.crawl(url, ...) takes the URL first and the settings as keyword arguments. "
-                "Pass the robot name as name=..."
-            )
-        url = check_url(url, "maxun.crawl(url, ...)")
+        call = "maxun.crawl(name, url, ...)"
+        check_no_extra(args, call)
+        url = check_url(url, call, name)
+        name = check_name(name, call)
+        check_formats(formats)
         config = CrawlConfig(
             mode=mode, limit=limit, max_depth=max_depth, include_paths=include_paths,
             exclude_paths=exclude_paths, use_sitemap=use_sitemap, follow_links=follow_links,
             respect_robots=respect_robots,
         )
-        settings = {
-            "type": "crawl",
-            "url": url,
-            "crawlConfig": to_payload(config),
-            "formats": check_formats(formats) or ["markdown"],
-            "monitor": monitor,
-            **build_llm_payload(llm_provider, llm_model, llm_api_key, llm_base_url),
-        }
-        return await self._create_reusing(
-            name,
-            auto_name("Crawl", describe_url(url), settings),
-            lambda robot_name: self.create(
-                robot_name, url, config, formats=formats, llm_provider=llm_provider, llm_model=llm_model,
-                llm_api_key=llm_api_key, llm_base_url=llm_base_url, monitor=monitor,
-            ),
+        return await self.create(
+            name, url, config, formats=formats, llm_provider=llm_provider, llm_model=llm_model,
+            llm_api_key=llm_api_key, llm_base_url=llm_base_url, monitor=monitor,
         )

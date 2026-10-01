@@ -10,7 +10,7 @@ load_dotenv()
 async def main():
     async with Maxun() as maxun:
         robot = await (
-            maxun.extract("https://practice.expandtesting.com/inputs", name="Form Fill Demo")
+            maxun.extract("Form Fill Demo", "https://practice.expandtesting.com/inputs")
             .type("#input-text", "John Doe")
             .type("#input-number", "42")
             .type("#input-password", "SecurePassword123", input_type="password")

@@ -1,54 +1,33 @@
-"""Automatic robot names.
+"""Argument checks shared by ``maxun.scrape(...)``, ``maxun.crawl(...)`` and friends."""
 
-When you don't name a robot, the SDK names it after what it does plus a short
-fingerprint of its settings, e.g. ``Scrape: maxun.dev/pricing [3f2a1c]``.
-
-The same call always produces the same name, so running a script twice reuses
-the robot instead of creating a duplicate. Different settings give a different
-fingerprint, so they never collide with an existing robot. The Node SDK uses the
-same scheme, so both produce the same name for the same settings.
-"""
-
-import hashlib
-import json
 import re
-from typing import Any
+from typing import Any, Optional
 
-_SECRET_KEYS = {"llmApiKey"}
-
-
-def canonical_json(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+_URL = re.compile(r"^[a-z][a-z0-9+.-]*://", re.I)
 
 
-def fingerprint(settings: Any) -> str:
-    if isinstance(settings, dict):
-        settings = {k: v for k, v in settings.items() if k not in _SECRET_KEYS and v is not None}
-    return hashlib.sha1(canonical_json(settings).encode("utf-8")).hexdigest()[:6]
+def looks_like_url(value: Any) -> bool:
+    return isinstance(value, str) and bool(_URL.match(value.strip()))
 
 
-def describe_url(url: str, limit: int = 60) -> str:
-    text = re.sub(r"^[a-z][a-z0-9+.-]*://", "", url.strip(), flags=re.I)
-    text = re.sub(r"^www\.", "", text).rstrip("/")
-    return text if len(text) <= limit else text[: limit - 1] + "…"
+def check_name(name: Any, call: str) -> str:
+    """Every robot needs a name; it is what Maxun shows for it."""
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError(f"{call} needs a robot name first, e.g. {call.split('(')[0]}('Pricing page', ...).")
+    return name.strip()
 
 
-def shorten(text: str, limit: int = 50) -> str:
-    text = " ".join(text.split())
-    return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
-def auto_name(kind: str, subject: str, settings: Any) -> str:
-    return f"{kind}: {subject} [{fingerprint(settings)}]"
-
-
-def check_url(url: Any, call: str) -> str:
-    """Catch the common mistake of passing a robot name where the URL goes."""
+def check_url(url: Any, call: str, name: Optional[str] = None) -> str:
+    if url is None and looks_like_url(name):
+        raise TypeError(f"{call} takes the robot name first, then the URL, e.g. {call.split('(')[0]}('My robot', {name!r}).")
     if not isinstance(url, str) or not url.strip():
-        raise ValueError(f"{call} needs a URL first, e.g. {call.split('(')[0]}('https://example.com').")
+        raise ValueError(f"{call} needs a URL, e.g. {call.split('(')[0]}('My robot', 'https://example.com').")
     url = url.strip()
-    if not re.match(r"^[a-z][a-z0-9+.-]*://", url, flags=re.I) and (" " in url or "." not in url):
-        raise ValueError(
-            f"{call} takes the URL first, but got {url!r}. Pass the robot name as name=..."
-        )
+    if not _URL.match(url) and (" " in url or "." not in url):
+        raise ValueError(f"{call} expected a URL as its second argument, but got {url!r}.")
     return url
+
+
+def check_no_extra(args: tuple, call: str) -> None:
+    if args:
+        raise TypeError(f"{call} takes the settings as keyword arguments, e.g. formats=[...].")
