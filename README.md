@@ -70,6 +70,7 @@ Each call takes what to work on first (a URL, a query or a file), then the setti
 
 - Running the same call again reuses the same robot instead of creating a duplicate.
 - Changing any setting gives a new name, so it never clashes with the old robot.
+- The Node SDK generates the same names, so both SDKs share robots.
 
 If you choose your own names, reuse behaves differently per robot type:
 
