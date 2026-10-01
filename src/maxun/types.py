@@ -213,14 +213,14 @@ class CrawlOptions:
 class SearchConfig:
     """A web search (DuckDuckGo).
 
-    ``mode="discover"`` returns result titles, URLs and snippets only.
-    ``mode="scrape"`` (the default) also opens every result and scrapes it in the
+    ``mode="discover"`` (the default) returns result titles, URLs and snippets only.
+    ``mode="scrape"`` also opens every result and scrapes it in the
     robot's ``formats``. ``limit`` is the number of results (default 10).
     ``time_range`` restricts results to the past day/week/month/year.
     """
 
     query: str
-    mode: SearchMode = "scrape"
+    mode: SearchMode = "discover"
     provider: Optional[SearchProvider] = None
     filters: Optional[Dict[str, Any]] = None
     limit: int = 10

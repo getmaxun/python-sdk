@@ -28,8 +28,8 @@ class Search(Resource):
         ``result.search_data``.
 
         :param search_config: A :class:`SearchConfig`, a dict, or just the query
-            string. ``mode="discover"`` returns titles/URLs/snippets only;
-            ``mode="scrape"`` (default) also scrapes each result.
+            string. ``mode="discover"`` (default) returns titles/URLs/snippets only;
+            ``mode="scrape"`` also scrapes each result.
         :param formats: What to capture from each result in scrape mode.
             Defaults to ["markdown"].
         :param llm_*: Self-hosted Maxun only, needed for the ``summary`` format.
@@ -51,7 +51,7 @@ class Search(Resource):
             payload["filters"] = {**(payload.get("filters") or {}), "timeRange": time_range}
 
         if formats and payload["mode"] == "discover":
-            warn('formats only apply in mode="scrape"; a discover search returns result links only.')
+            warn('formats only apply in mode="scrape"; a discover search returns result links only. Pass mode="scrape" to scrape each result.')
 
         robot_data = await self.client.create_search_robot(
             {
@@ -68,7 +68,7 @@ class Search(Resource):
         name: str,
         query: Optional[str] = None,
         *args: Any,
-        mode: SearchMode = "scrape",
+        mode: SearchMode = "discover",
         limit: int = 10,
         time_range: Optional[SearchTimeRange] = None,
         formats: Optional[List[Format]] = None,
@@ -83,8 +83,8 @@ class Search(Resource):
 
         :param name: Robot name, as shown in Maxun.
         :param query: What to search for.
-        :param mode: ``"discover"`` returns titles, URLs and snippets;
-            ``"scrape"`` (default) also scrapes every result.
+        :param mode: ``"discover"`` (default) returns titles, URLs and snippets;
+            ``"scrape"`` also opens and scrapes every result.
         :param limit: Number of results.
         :param time_range: ``"day"``, ``"week"``, ``"month"`` or ``"year"``.
         :param formats: What to capture from each result in scrape mode. Defaults to ["markdown"].
