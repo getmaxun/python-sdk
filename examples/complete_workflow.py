@@ -12,7 +12,7 @@ async def main():
     async with Maxun() as maxun:
         robot = await (
             maxun.extract("Trending Books Daily", "https://openlibrary.org/trending/daily")
-            .capture_list({"selector": "li.searchResultItem", "max_items": 25})
+            .capture_list("li.searchResultItem", max_items=25)
             .monitor_changes()
             .build()
         )
@@ -21,7 +21,7 @@ async def main():
         await robot.schedule(run_every=1, run_every_unit="DAYS", timezone="UTC", at_time_start="08:00")
 
         result = await robot.run()        # one run now, to check it works
-        print(f"{len(result.list_data)} books; next run {robot.get_schedule()['nextRunAt']}")
+        print(f"{len(result.list_data)} books; next run {(await robot.get_schedule())['nextRunAt']}")
 
 
 asyncio.run(main())

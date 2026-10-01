@@ -20,11 +20,11 @@ async def main():
     async with Maxun() as maxun:
         robot = await (
             maxun.extract("Open Library Trending", "https://openlibrary.org/trending/daily")
-            .capture_list({
-                "selector": "li.searchResultItem",
-                "pagination": {"type": "clickNext", "selector": 'a[data-ol-link-track="Pager|Next"]'},
-                "max_items": 40,
-            })
+            .capture_list(
+                "li.searchResultItem",
+                max_items=40,
+                pagination={"type": "clickNext", "selector": 'a[data-ol-link-track="Pager|Next"]'},
+            )
             .build()
         )
         result = await robot.run()

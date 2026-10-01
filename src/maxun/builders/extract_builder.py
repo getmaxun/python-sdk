@@ -1,6 +1,6 @@
-from typing import Any, Mapping, Optional, Union
+from typing import Any, Dict, Mapping, Optional, Union
 
-from ..types import ExtractFields, ExtractListConfig
+from ..types import ExtractFields
 from .workflow_builder import WorkflowBuilder
 
 
@@ -31,14 +31,31 @@ class ExtractBuilder(WorkflowBuilder):
             raise ValueError("capture_text() needs at least one {field_name: selector} pair")
         return self._add_action("scrapeSchema", [dict(fields)], name)
 
-    def capture_list(self, config: Union[ExtractListConfig, dict], name: Optional[str] = None):
+    def capture_list(
+        self,
+        selector: Union[str, dict, None] = None,
+        name: Optional[str] = None,
+        *,
+        max_items: Optional[int] = None,
+        pagination: Optional[Dict[str, Any]] = None,
+    ):
         """Capture a repeated element as a list. Fields inside each item are
-        detected automatically. Results are in ``result.list_data``.
+        detected automatically. Results are in ``result.list_data``::
 
-        ``config``: ``selector`` (required), ``max_items`` (default 100) and
-        ``pagination`` (``{"type": "clickNext", "selector": "a.next"}``; leave out
-        to auto-detect, or use type ``"none"`` to stay on the first page).
+            .capture_list("article.product", max_items=50,
+                          pagination={"type": "clickNext", "selector": "a.next"})
+
+        ``max_items`` defaults to 100. Leave ``pagination`` out to auto-detect
+        it, or use ``{"type": "none"}`` to stay on the first page.
         """
+        if isinstance(selector, str):
+            config: Any = {"selector": selector, "max_items": max_items, "pagination": pagination}
+        else:  # older code passed a dict / ExtractListConfig
+            config = selector or {}
+            if max_items is not None or pagination is not None:
+                config = {**(config if isinstance(config, dict) else vars(config)),
+                          **({"max_items": max_items} if max_items is not None else {}),
+                          **({"pagination": pagination} if pagination is not None else {})}
         selector = _read(config, "selector", "itemSelector")
         if not selector:
             raise ValueError("capture_list() needs a selector for the repeated item")

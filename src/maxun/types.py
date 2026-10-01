@@ -12,15 +12,20 @@ __all__ = [
     "RobotType", "RobotMode", "Format", "DocumentFormat", "RunStatus", "TimeUnit",
     "Weekday", "CrawlMode", "LLMProvider", "SearchMode", "SearchProvider",
     "SearchTimeRange", "PaginationType", "WebhookEvent",
-    "Config", "ScheduleConfig", "WebhookConfig", "ExecutionOptions",
-    "ExtractFields", "PaginationConfig", "ExtractListConfig",
-    "CrawlConfig", "CrawlOptions", "SearchConfig", "SearchOptions",
+    "Config", "ExtractFields",
     "Workflow", "WorkflowFile", "RobotData", "Run", "ApiResponse",
     "ListLimitUpdate",
     "MaxunError", "AuthenticationError", "NotFoundError", "ConflictError",
     "ValidationError", "RunFailedError",
     "DEFAULT_BASE_URL", "WEBHOOK_EVENTS",
 ]
+
+# Older option classes. Every method now takes plain keyword arguments; these
+# still import from ``maxun`` (with a DeprecationWarning) so old code runs.
+DEPRECATED_CLASSES = (
+    "ScheduleConfig", "WebhookConfig", "ExecutionOptions", "PaginationConfig",
+    "ExtractListConfig", "CrawlConfig", "CrawlOptions", "SearchConfig", "SearchOptions",
+)
 
 # ======================
 # Literals

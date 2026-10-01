@@ -41,3 +41,20 @@ __all__ = [
     "OllamaProvider", "LLMConfig", "LLMMessage", "LLMResponse",
     *[name for name in _types_all if name not in ("RunResult",)],
 ]
+
+
+def __getattr__(name: str):
+    from . import types as _types
+
+    if name in _types.DEPRECATED_CLASSES:
+        import warnings
+
+        warnings.warn(
+            f"maxun.{name} is deprecated: pass plain keyword arguments instead "
+            "(e.g. robot.schedule(run_every=6, run_every_unit='HOURS'), "
+            "robot.add_webhook(url, events=[...]), maxun.crawl(name, url, limit=...)).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return getattr(_types, name)
+    raise AttributeError(f"module 'maxun' has no attribute {name!r}")

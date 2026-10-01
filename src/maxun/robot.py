@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Union
 from ._monitoring import compare_crawl, crawl_diff, crawl_pages, previous_successful_run
 from ._utils import warn
 from .client import Client
-from .types import ExecutionOptions, Format, MaxunError, ScheduleConfig, WebhookConfig
+from .types import Format, MaxunError, TimeUnit, WebhookEvent
 
 
 def _clean_time(value: str) -> str:
@@ -437,7 +437,7 @@ class Robot(dict):
 
     async def run(
         self,
-        options: Optional[Union[ExecutionOptions, Dict[str, Any]]] = None,
+        options: Optional[Dict[str, Any]] = None,
         *,
         formats: Optional[List[Format]] = None,
         smart_queries: Optional[str] = None,
@@ -570,59 +570,99 @@ class Robot(dict):
 
     async def schedule(
         self,
-        config: Optional[Union[ScheduleConfig, Dict[str, Any]]] = None,
-        **kwargs: Any,
+        _legacy: Optional[Dict[str, Any]] = None,
+        /,
+        *,
+        run_every: Optional[int] = None,
+        run_every_unit: Optional[TimeUnit] = None,
+        timezone: Optional[str] = None,
+        start_from: Optional[str] = None,
+        day_of_month: Optional[int] = None,
+        at_time_start: Optional[str] = None,
+        at_time_end: Optional[str] = None,
     ) -> dict:
-        """Run the robot on a schedule. Returns the saved schedule.
-
-        Either pass a :class:`ScheduleConfig` / dict, or keyword arguments::
+        """Run the robot on a schedule. Returns the saved schedule::
 
             await robot.schedule(run_every=6, run_every_unit="HOURS", timezone="Asia/Kolkata")
+
+        ``run_every_unit``: MINUTES, HOURS, DAYS, WEEKS or MONTHS. ``timezone``
+        defaults to UTC. ``start_from`` is the weekday for weekly schedules,
+        ``day_of_month`` the day for monthly ones; ``at_time_start`` /
+        ``at_time_end`` ("HH:MM") limit the hours it runs in.
         """
-        if config is None:
-            config = kwargs
-        elif kwargs:
-            raise TypeError("Pass either a schedule config or keyword arguments, not both.")
-        self.robot_data = await self.client.schedule_robot(self.id, config)
-        return self.get_schedule() or {}
+        options = {
+            key: value
+            for key, value in (
+                ("run_every", run_every),
+                ("run_every_unit", run_every_unit),
+                ("timezone", timezone),
+                ("start_from", start_from),
+                ("day_of_month", day_of_month),
+                ("at_time_start", at_time_start),
+                ("at_time_end", at_time_end),
+            )
+            if value is not None
+        }
+        if _legacy is not None:
+            if options:
+                raise TypeError("Pass the schedule as keyword arguments only, e.g. robot.schedule(run_every=6, run_every_unit='HOURS').")
+            options = _legacy
+        self.robot_data = await self.client.schedule_robot(self.id, options)
+        return self._saved_schedule() or {}
 
     async def unschedule(self) -> None:
+        """Stop running the robot on a schedule."""
         self.robot_data = await self.client.unschedule_robot(self.id)
 
-    def get_schedule(self) -> Optional[dict]:
+    async def get_schedule(self) -> Optional[dict]:
+        """The robot's schedule (with ``nextRunAt`` and ``cronExpression``), or
+        ``None`` if it has none."""
+        await self.refresh()
+        return self._saved_schedule()
+
+    def _saved_schedule(self) -> Optional[dict]:
         return self.robot_data.get("schedule") or None
 
     # ---------- webhooks ----------
 
     async def add_webhook(
         self,
-        webhook: Optional[Union[str, WebhookConfig, Dict[str, Any]]] = None,
+        url: Optional[str] = None,
         *,
-        events: Optional[List[str]] = None,
+        events: Optional[List[WebhookEvent]] = None,
         retry_attempts: Optional[int] = None,
         retry_delay: Optional[int] = None,
         timeout: Optional[int] = None,
     ) -> dict:
-        """Get a POST to ``url`` when a run completes or fails. Returns the saved webhook.
+        """Get a POST to ``url`` when a run completes or fails. Returns the saved webhook::
 
-        ``webhook`` can be a URL string, a :class:`WebhookConfig` or a dict.
+            await robot.add_webhook("https://example.com/hook", events=["run_failed"], retry_attempts=5)
+
+        ``events`` defaults to both ``run_completed`` and ``run_failed``.
         Adding a URL that is already registered updates it instead of duplicating it.
         """
-        if webhook is None:
-            raise TypeError("add_webhook() needs a URL or a WebhookConfig")
-        if isinstance(webhook, str):
-            webhook = {
-                "url": webhook,
+        if url is None:
+            raise TypeError("add_webhook() needs a URL, e.g. robot.add_webhook('https://example.com/hook')")
+        if isinstance(url, str):
+            webhook: Any = {
+                "url": url,
                 "events": events,
                 "retry_attempts": retry_attempts,
                 "retry_delay": retry_delay,
                 "timeout": timeout,
             }
-        url = webhook.get("url") if isinstance(webhook, dict) else webhook.url
+        else:  # a dict or a WebhookConfig from older code
+            webhook = url
+            url = webhook.get("url") if isinstance(webhook, dict) else webhook.url
         self.robot_data = await self.client.add_webhook(self.id, webhook)
-        return next(w for w in self.get_webhooks() if w.get("url") == url)
+        return next(w for w in self._saved_webhooks() if w.get("url") == url)
 
-    def get_webhooks(self) -> List[dict]:
+    async def get_webhooks(self) -> List[dict]:
+        """The robot's webhooks (``[]`` if none)."""
+        await self.refresh()
+        return self._saved_webhooks()
+
+    def _saved_webhooks(self) -> List[dict]:
         return list(self.robot_data.get("webhooks") or [])
 
     async def remove_webhook(self, id_or_url: str) -> None:

@@ -13,9 +13,11 @@ import pytest
 import respx
 
 from maxun import (
-    Config, ConflictError, CrawlConfig, Crawl, Extract, Maxun, MaxunSync, NotFoundError,
-    RunFailedError, Scrape, ScheduleConfig, SearchConfig, ValidationError, WebhookConfig,
+    Config, ConflictError, Crawl, Extract, Maxun, MaxunSync, NotFoundError,
+    RunFailedError, Scrape, ValidationError,
 )
+# Older option classes: still work, no longer exported from ``maxun``.
+from maxun.types import CrawlConfig, ScheduleConfig, SearchConfig, WebhookConfig
 
 BASE = "http://localhost:8080/api/sdk"
 
@@ -132,7 +134,7 @@ async def test_extract_builder(mock, maxun):
         maxun.extract.create("E")
         .navigate("https://e.com")
         .capture_text({"Title": "h1"})
-        .capture_list({"selector": "li", "max_items": 5, "pagination": {"type": "none"}})
+        .capture_list("li", max_items=5, pagination={"type": "none"})
         .scroll(2)
         .build()
     )
@@ -300,8 +302,31 @@ async def test_schedule_forms(mock, maxun):
     result = await robot.schedule(run_every=2, run_every_unit="WEEKS", start_from="monday")
     assert body(route)["schedule"]["startFrom"] == "MONDAY"
     assert result["cronExpression"] == "0 */6 * * *"
+    with pytest.raises(TypeError, match="keyword arguments"):
+        await robot.schedule({"runEvery": 1, "runEveryUnit": "DAYS"}, timezone="UTC")
     await robot.unschedule()
     assert body(route) == {"schedule": None}
+
+
+async def test_get_schedule_is_awaitable_with_or_without_schedule(mock, maxun):
+    saved = {"runEvery": 6, "runEveryUnit": "HOURS", "timezone": "UTC", "nextRunAt": "2026-01-01T00:00:00Z"}
+    state = {"schedule": None}
+    mock.get("robots/r1").mock(side_effect=lambda r: httpx.Response(
+        200, json={"data": {**robot_record(), "schedule": state["schedule"]}}))
+    robot = await maxun.robots.get("r1")
+    assert await robot.get_schedule() is None
+    assert await robot.get_webhooks() == []
+    state["schedule"] = saved  # e.g. scheduled from the UI meanwhile
+    assert await robot.get_schedule() == saved
+
+
+def test_option_classes_are_deprecated():
+    import maxun
+    assert "ScheduleConfig" not in maxun.__all__ and "WebhookConfig" not in maxun.__all__
+    with pytest.warns(DeprecationWarning, match="keyword arguments"):
+        from maxun import ScheduleConfig as _  # noqa: F401
+    with pytest.raises(AttributeError):
+        maxun.NoSuchThing
 
 
 async def test_webhooks(mock, maxun):
@@ -334,9 +359,9 @@ async def test_webhooks(mock, maxun):
         await robot.add_webhook({"url": "https://hooks.test/c", "events": ["done"]})
 
     await robot.remove_webhook("https://hooks.test/b")
-    assert [w["url"] for w in robot.get_webhooks()] == ["https://hooks.test/a"]
+    assert [w["url"] for w in await robot.get_webhooks()] == ["https://hooks.test/a"]
     await robot.remove_webhooks()
-    assert robot.get_webhooks() == []
+    assert await robot.get_webhooks() == []
 
 
 async def test_list_limit_and_rename(mock, maxun):
@@ -394,6 +419,8 @@ def test_sync_client(mock):
         assert robot.id == "r1"
         assert robot.run().text_data == {"Title": "Hi"}
         assert [r.id for r in m.robots.list()] == ["r1"]
+        mock.get("robots/r1").respond(json={"data": robot_record()})
+        assert robot.get_schedule() is None and robot.get_webhooks() == []
 
 
 def test_deprecated_builder_calls_warn():

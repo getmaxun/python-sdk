@@ -6,7 +6,7 @@ to your URL. Failed deliveries are retried with exponential backoff.
 import asyncio
 
 from dotenv import load_dotenv
-from maxun import Maxun, WebhookConfig
+from maxun import Maxun
 
 load_dotenv()
 
@@ -20,13 +20,13 @@ async def main():
         print("Added", hook["id"], hook["events"])
 
         # Only failures, with more retries
-        await robot.add_webhook(WebhookConfig(
-            url="https://alerts.example/maxun-failed",
+        await robot.add_webhook(
+            "https://alerts.example/maxun-failed",
             events=["run_failed"],
             retry_attempts=5,
-        ))
+        )
 
-        print([w["url"] for w in robot.get_webhooks()])
+        print([w["url"] for w in await robot.get_webhooks()])
 
         await robot.remove_webhook("https://alerts.example/maxun-failed")
         await robot.remove_webhooks()  # remove all

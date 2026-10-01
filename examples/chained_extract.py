@@ -14,7 +14,7 @@ async def main():
         robot = await (
             maxun.extract("Premier League Table", "https://www.bbc.com/sport/football/tables")
             .capture_text({"Title": "h1"}, name="Heading")
-            .capture_list({"selector": "table tbody tr", "max_items": 20}, name="Standings")
+            .capture_list("table tbody tr", max_items=20, name="Standings")
             .build()
         )
         result = await robot.run()

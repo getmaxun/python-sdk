@@ -118,7 +118,7 @@ result = await robot.run(smart_queries="List the three newest stories")
 robot = await (
     maxun.extract("Products", "https://shop.example.com")
     .capture_text({"Store name": "h1", "Tagline": ".hero p"})
-    .capture_list({"selector": "article.product", "max_items": 50})
+    .capture_list("article.product", max_items=50)
     .build()
 )
 result = await robot.run()
@@ -127,7 +127,7 @@ result.list_data   # [{...}, {...}]
 ```
 
 - `capture_text({field: selector})` captures single values. CSS and XPath selectors both work.
-- `capture_list({"selector": ...})` captures every element matching `selector`; the fields inside each item are detected automatically. `max_items` defaults to 100.
+- `capture_list(selector)` captures every element matching `selector`; the fields inside each item are detected automatically. `max_items` defaults to 100.
 - Pagination is auto-detected. To set it yourself, add `"pagination"`:
   - `{"type": "scrollDown"}` for infinite scroll
   - `{"type": "clickNext", "selector": "a.next"}` for a Next button
@@ -148,7 +148,7 @@ Other steps, in the order you want them to happen:
 .monitor_changes()                    # see Change monitoring
 ```
 
-`maxun.extract(name, url, monitor=True)` turns on [change monitoring](#change-monitoring). `capture_list` also accepts `ExtractListConfig(selector=..., max_items=..., pagination=PaginationConfig(type="clickNext", selector=...))`.
+`maxun.extract(name, url, monitor=True)` turns on [change monitoring](#change-monitoring). `capture_list(selector, max_items=100, pagination=...)` auto-detects pagination; pass `pagination={"type": "clickNext", "selector": "a.next"}` to set it, or `{"type": "none"}` to stay on the first page.
 
 ### Extract with a prompt
 
@@ -345,7 +345,7 @@ await robot.schedule(run_every=6, run_every_unit="HOURS", timezone="Asia/Kolkata
 await robot.schedule(run_every=1, run_every_unit="WEEKS", start_from="MONDAY", at_time_start="09:00")
 await robot.schedule(run_every=1, run_every_unit="MONTHS", day_of_month=1, at_time_start="06:30")
 
-robot.get_schedule()      # includes nextRunAt and the generated cronExpression
+await robot.get_schedule()   # includes nextRunAt and cronExpression; None if not scheduled
 await robot.unschedule()
 ```
 
@@ -353,15 +353,13 @@ await robot.unschedule()
 - `at_time_start` (`"HH:MM"`) is the time of day for DAYS/WEEKS/MONTHS. For HOURS, only its minutes are used.
 - `start_from` is the weekday for WEEKS. `day_of_month` is for MONTHS.
 
-A `ScheduleConfig(...)` or a dict works in place of keyword arguments.
-
 ### Webhooks
 
 ```python
 hook = await robot.add_webhook("https://your-server.com/maxun")   # both events
-await robot.add_webhook(WebhookConfig(url="https://alerts.example.com", events=["run_failed"], retry_attempts=5))
+await robot.add_webhook("https://alerts.example.com", events=["run_failed"], retry_attempts=5)
 
-robot.get_webhooks()
+await robot.get_webhooks()                                 # [] if none
 await robot.remove_webhook("https://alerts.example.com")   # by URL or id
 await robot.remove_webhooks()                              # all
 ```
@@ -378,7 +376,7 @@ Scrape, crawl and extract robots can compare every run with the previous success
 ```python
 robot = await maxun.scrape("Prices", "https://example.com/pricing", formats=["text"], monitor=True)
 robot = await maxun.crawl("Docs", "https://docs.example.com", monitor=True)
-robot = await maxun.extract("Products", url, monitor=True).capture_list({...}).build()
+robot = await maxun.extract("Products", url, monitor=True).capture_list("tr.product").build()
 robot = await maxun.extract("Products", url, prompt="Product names and prices", monitor=True)
 
 # or on an existing robot
@@ -480,7 +478,7 @@ with MaxunSync() as maxun:
 
     robot = (
         maxun.extract("HN", "https://news.ycombinator.com")
-        .capture_list({"selector": "tr.athing", "max_items": 10})
+        .capture_list("tr.athing", max_items=10)
         .build()
     )
     print(robot.run().list_data)
@@ -502,10 +500,10 @@ Existing code keeps working. `Extract(Config(...))`, `Scrape(...)`, `Crawl(...)`
   - `set_cookies()` and `mode()` were never supported by the server; they now warn and do nothing.
   - Steps added before `navigate()` raise an error.
 - **`CrawlConfig`/`SearchConfig`** now have working defaults. Before, leaving out `limit` or `max_depth` crawled nothing.
-- **`schedule()`, `add_webhook()` and `run()`** accept the `ScheduleConfig`, `WebhookConfig` and `ExecutionOptions` classes, not only camelCase dicts.
+- **No more option classes.** Every call takes plain keyword arguments: `robot.schedule(run_every=6, run_every_unit="HOURS")`, `robot.add_webhook(url, events=[...], retry_attempts=5)`, `capture_list(selector, max_items=...)`. `ScheduleConfig`, `WebhookConfig`, `ExecutionOptions`, `CrawlConfig`, `SearchConfig`, `ExtractListConfig` and `PaginationConfig` still import (with a `DeprecationWarning`) so old code keeps running.
 - **`Config`** reads `MAXUN_API_KEY`/`MAXUN_BASE_URL`/`MAXUN_TEAM_ID` when arguments are left out.
 - **Return values:**
-  - `robot.get_webhooks()` returns `[]` instead of `None` when there are none.
+  - `robot.get_schedule()` and `robot.get_webhooks()` are now `async` and read the robot fresh from the server, so they also see changes made in the app. `get_webhooks()` returns `[]` instead of `None` when there are none.
   - `robot.schedule()` returns the saved schedule and `robot.add_webhook()` returns the saved webhook; both used to return `None`.
 - **Document formats:** `create_document_parse_robot` raises `ValueError` for unknown formats instead of silently dropping them.
 - **Runs:** `robot.get_runs()`, `get_run()` and `get_latest_run()` return `Run` dicts holding only the summary (`id`, `runId`, `robotId`, `name`, `status`, `startedAt`, `finishedAt`, with ISO UTC times). `run["runId"]` and other raw fields like `run["serializableOutput"]` can still be read; `run.get_data()` returns the whole raw record and `run.result` the output.

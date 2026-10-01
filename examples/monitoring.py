@@ -36,7 +36,7 @@ async def main():
         # Captured data from selectors
         listing = await (
             maxun.extract("HN Front Page Monitor", "https://news.ycombinator.com", monitor=True)
-            .capture_list({"selector": "tr.athing", "max_items": 30})
+            .capture_list("tr.athing", max_items=30)
             .build()
         )
         await listing.run()

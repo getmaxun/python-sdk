@@ -10,7 +10,7 @@ with MaxunSync() as maxun:
 
     robot = (
         maxun.extract("HN Titles (sync)", "https://news.ycombinator.com")
-        .capture_list({"selector": "tr.athing", "max_items": 10})
+        .capture_list("tr.athing", max_items=10)
         .build()
     )
     print(robot.run().list_data[:3])
