@@ -91,10 +91,7 @@ with MaxunSync(api_key="your-api-key") as maxun:
     result = robot.run()
     print(result.markdown)
 ```
-
-:::note
 The examples in these docs use `await`, so they need to run inside an `async` function like the one at the top of this page. With `MaxunSync`, drop the `await`.
-:::
 
 ## Errors
 
