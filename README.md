@@ -27,7 +27,7 @@ pip install maxun
 
 - Python 3.8+
 - A Maxun Cloud account or a self-hosted Maxun instance
-- An API key from the [Maxun Dashboard](/api/api)
+- An API key from the [Maxun Dashboard](https://docs.maxun.dev/api/api)
 
 ## Configuration
 
